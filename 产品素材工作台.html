@@ -1,0 +1,2676 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>素材工作台</title>
+<!-- 本工作台通过 WorkBuddy 搭建；一期主体为本地单文件应用，数据落盘到本地文件夹 -->
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+:root{
+--acc:#185FA5;--acc-soft:#E6F1FB;--acc-line:#85B7EB;
+--g1:#185FA5;--g2:#0F6E56;--g3:#854F0B;--g4:#534AB7;--g5:#993556;--g6:#185FA5;
+--ink:#1a1a19;--ink2:#5F5E5A;--ink3:#8a8983;
+--bd:#e4e3dd;--bd2:#d3d1c7;--bg:#f7f7f5;--card:#fff;
+--danger:#A32D2D;--danger-bg:#FCEBEB;--ok:#0F6E56;
+--warn-ink:#8A6116;--warn-bg:#FDF6E3;
+--thumb:220px;
+}
+html,body{height:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",Roboto,sans-serif;
+font-size:14px;color:var(--ink);background:var(--bg);line-height:1.6;overflow:hidden}
+button,input,select{font-family:inherit;color:inherit}
+button{cursor:pointer;border:none;background:none}
+svg{display:block;flex:none}
+
+/* ---------- 顶栏 ---------- */
+.hd{height:56px;background:var(--card);border-bottom:1px solid var(--bd);display:flex;
+align-items:center;gap:12px;padding:0 14px;position:relative;z-index:30}
+.hd h1{font-size:15px;font-weight:500;letter-spacing:.2px;white-space:nowrap}
+.hd .sp{flex:1}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:4px 9px;
+border-radius:20px;background:var(--acc-soft);color:var(--acc);white-space:nowrap}
+.pill.warn{background:#FAEEDA;color:#854F0B}
+.pill.ok{background:#E1F5EE;color:var(--ok)}
+.pill.err{background:var(--danger-bg);color:var(--danger)}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.ib{width:34px;height:34px;border-radius:8px;display:grid;place-items:center;color:var(--ink2)}
+.ib:hover{background:#f1f0ec;color:var(--ink)}
+.ib.on{background:var(--acc-soft);color:var(--acc)}
+.mbtn{height:34px;padding:0 12px;border-radius:8px;font-size:13px;color:var(--ink2);
+display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.mbtn:hover{background:#f1f0ec;color:var(--ink)}
+.mbtn.pri{background:var(--acc);color:#fff}
+.mbtn.pri:hover{background:#12508f}
+.mbtn.dis{opacity:.4;pointer-events:none}
+
+/* ---------- 布局 ---------- */
+.wrap{display:flex;height:calc(100% - 56px);position:relative}
+.side{width:268px;flex:none;background:var(--card);border-right:1px solid var(--bd);
+display:flex;flex-direction:column;overflow:hidden}
+.side-hd{padding:12px 14px 10px;border-bottom:1px solid var(--bd);display:flex;
+align-items:center;gap:8px}
+.side-hd h2{font-size:13px;font-weight:500;flex:1}
+.tree{flex:1;overflow-y:auto;padding:8px 8px 20px}
+.tnode{margin-bottom:2px}
+.trow{display:flex;align-items:center;gap:7px;padding:7px 8px;border-radius:8px;
+font-size:13px;cursor:pointer;user-select:none;min-height:36px}
+.trow:hover{background:#f4f3ef}
+.trow.cur{background:var(--acc-soft);color:var(--acc);font-weight:500}
+.trow .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trow .cnt{font-size:11px;color:var(--ink3);font-variant-numeric:tabular-nums}
+.trow .mini{opacity:0;width:22px;height:22px;border-radius:6px;display:grid;place-items:center;
+color:var(--ink3);flex:none}
+.trow:hover .mini{opacity:1}
+.trow .mini:hover{background:#fff;color:var(--acc)}
+.tkids{margin-left:14px;border-left:1px solid var(--bd);padding-left:4px}
+.emptyt{padding:22px 12px;text-align:center;color:var(--ink3);font-size:12px;line-height:1.8}
+
+/* ---------- 主区 ---------- */
+/* 注意：overflow-x 一旦写成 hidden/auto，.main 就成为滚动容器，
+   内层 .topsticky 的 position:sticky 会失效（规范强制 visible→auto）。
+   所以横向溢出不用 CSS 控制，改由 initOverflowGuard() 在 JS 里兜住。 */
+.main{flex:1;overflow-y:auto;padding:0 0 60vh;position:relative}
+.bc{display:flex;align-items:center;gap:6px;padding:14px 20px 10px;font-size:12px;
+color:var(--ink2);flex-wrap:wrap}
+.bc b{font-weight:500;color:var(--ink)}
+.bc .sep{color:var(--ink3)}
+.bc .cur b{color:var(--acc)}
+/* 吸顶整体：面包屑 + 操作栏打包，一起常驻。
+   原来 .bc 自带 sticky、.toolbar 没有，滚动时两者会分离；
+   统一交给父容器 .topsticky 管理，不会错位。 */
+.topsticky{position:sticky;top:0;z-index:30;background:var(--bg);box-shadow:0 1px 0 var(--bd)}
+.toolbar{display:flex;align-items:center;gap:10px;padding:0 20px 14px;flex-wrap:wrap}
+.tbar-l{font-size:12px;color:var(--ink2);display:flex;align-items:center;gap:7px}
+input[type=range]{width:96px;accent-color:var(--acc);height:20px}
+
+/* ---------- 分组卡 ---------- */
+.gcard{margin:0 20px 22px;border:1px solid var(--bd);border-radius:12px;background:var(--card);
+overflow:hidden;position:relative}
+.gcard::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--gc,#185FA5)}
+.ghd{display:flex;align-items:center;gap:10px;padding:11px 13px;cursor:pointer;user-select:none}
+.ghd:hover{background:#faf9f6}
+.ghd h3{font-size:14px;font-weight:500;flex:1;min-width:0;overflow:hidden;
+text-overflow:ellipsis;white-space:nowrap}
+.gbadge{font-size:11px;padding:2px 7px;border-radius:10px;background:var(--acc-soft);
+color:var(--acc);font-variant-numeric:tabular-nums;flex:none}
+.ghd .act{display:flex;gap:2px;opacity:0;flex:none}
+.gcard:hover .ghd .act{opacity:1}
+.ghd .act .ib{width:28px;height:28px}
+.gbody{padding:2px 13px 14px;position:relative}
+.mload{display:block;width:100%;height:38px;margin-top:10px;border:1px dashed var(--bd2);
+border-radius:9px;font-size:12.5px;color:var(--ink2);background:#fbfaf8}
+.mload:hover{border-color:var(--acc);color:var(--acc);background:var(--acc-soft)}
+.gcard.cl .gbody{display:none}
+.gcard.cl .ghd h3{color:var(--ink2)}
+/* 分组整体拖放热区：悬停时整卡高亮 */
+.gdrop{position:absolute;left:0;right:0;top:0;bottom:0;z-index:5;display:flex;
+align-items:center;justify-content:center;background:rgba(230,241,251,.94);
+border:2px dashed var(--acc);border-radius:0 0 11px 11px;opacity:0;pointer-events:none;
+transition:opacity .12s}
+.gcard.dragin .gdrop{opacity:1;pointer-events:auto}
+.gcard.dragin .gbody > *:not(.gdrop){opacity:.25}
+.gdrop span{font-size:13px;color:var(--acc);font-weight:500;text-align:center;padding:0 16px}
+
+/* ---------- 素材网格 ---------- */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--thumb),1fr));gap:12px}
+.cell{border:1px solid var(--bd);border-radius:10px;overflow:hidden;background:#fff;
+position:relative;transition:border-color .12s,box-shadow .12s}
+.cell:hover{border-color:var(--acc-line)}
+.cell.sel{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc-soft)}
+.thumb{width:100%;aspect-ratio:1;background:#f4f3ef;position:relative;overflow:hidden;
+display:grid;place-items:center}
+.thumb img{width:100%;height:100%;object-fit:contain;display:block}
+.thumb .ph{color:var(--ink3);font-size:11px;text-align:center;padding:8px;line-height:1.6}
+.thumb .vph{width:44px;height:44px;border-radius:50%;background:#e8e7e1;display:grid;
+place-items:center;margin:0 auto 6px;color:var(--ink3)}
+.cmeta{padding:7px 9px 8px}
+.cname{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.csub{font-size:11px;color:var(--ink3);display:flex;gap:6px;margin-top:2px;
+overflow:hidden;white-space:nowrap}
+.csub .tg{color:var(--g2)}
+.csub .src{color:var(--g3);overflow:hidden;text-overflow:ellipsis;max-width:88px}
+.chk{position:absolute;left:7px;top:7px;width:20px;height:20px;border-radius:6px;
+background:rgba(255,255,255,.94);border:1px solid var(--bd2);display:grid;place-items:center;
+opacity:0;cursor:pointer}
+.cell:hover .chk,.cell.sel .chk{opacity:1}
+.cell.sel .chk{background:var(--acc);border-color:var(--acc);color:#fff}
+.miss{position:absolute;inset:0;background:var(--danger-bg);display:grid;place-items:center;
+text-align:center;padding:10px;gap:6px;color:var(--danger);font-size:11px}
+/* 待重连 ≠ 文件丢失：用中性色区分，避免误导用户去重新导入 */
+.miss.soft{background:var(--warn-bg);color:var(--warn-ink)}
+.gsec{display:flex;align-items:center;gap:7px;margin:12px 0 9px;font-size:12px;color:var(--ink2)}
+.gsec .ln{flex:1;height:1px;background:var(--bd)}
+.gsec .n{font-size:11px;color:var(--ink3)}
+.addcell{border:1px dashed var(--bd2);border-radius:10px;display:grid;place-items:center;
+color:var(--ink3);font-size:12px;cursor:pointer;background:#fbfaf8;gap:5px;
+min-height:120px;padding:14px;text-align:center}
+.addcell:hover{border-color:var(--acc);color:var(--acc);background:var(--acc-soft)}
+.addcell.drag{border-color:var(--acc);background:var(--acc-soft);color:var(--acc);
+border-style:solid;border-width:2px}
+/* 拖入悬停提示 */
+.drophint{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:6;
+background:var(--acc);color:#fff;font-size:12px;padding:7px 13px;border-radius:20px;
+white-space:nowrap;pointer-events:none;box-shadow:0 4px 14px rgba(24,95,165,.32)}
+.addcell{position:relative}
+.addcell.big{min-height:104px;padding:16px 14px;gap:6px}
+.addcell.big svg{opacity:.6}
+.addcell.big div{font-size:13px}
+.addcell.big span{font-size:12px;color:var(--ink3);line-height:1.6}
+/* 整页拖入时的边框提示 */
+body.dragging .main{outline:2px dashed var(--acc);outline-offset:-10px}
+.dzmask{position:fixed;left:0;right:0;bottom:0;padding:11px 15px;background:var(--acc);
+color:#fff;font-size:13px;text-align:center;z-index:70;display:none}
+body.dragging .dzmask{display:block}
+
+/* ---------- 顶部操作栏 ---------- */
+.tbar-l{font-size:12px;color:var(--ink2);display:flex;align-items:center;gap:7px}
+/* 操作按钮区：贴右排列，窄屏自动换行 */
+.tbar-ops{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tbar-sel{font-size:12px;color:var(--acc);font-weight:500;white-space:nowrap}
+.tbar-sel b{font-weight:600;font-variant-numeric:tabular-nums}
+.tbar-div{width:1px;height:16px;background:var(--bd2);margin:0 2px}
+/* 待重连横幅：常驻显示，比一闪而过的 toast 更可靠 */
+.reconn-bar{display:flex;align-items:center;gap:12px;margin:0 20px 14px;padding:13px 15px;
+background:var(--warn-bg);border:1px solid #E8D9A8;border-radius:11px;color:var(--warn-ink)}
+.reconn-bar b{font-size:13.5px;font-weight:600}
+.reconn-bar span{font-size:12px;line-height:1.6;opacity:.9}
+.reconn-bar>div{flex:1;min-width:0}
+.mbtn.danger{color:var(--danger);border-color:var(--bd2)}
+.mbtn.danger:hover{background:var(--danger-bg);border-color:var(--danger)}
+.kbd{font-size:11px;padding:1px 5px;border:1px solid var(--bd2);border-bottom-width:2px;
+border-radius:5px;color:var(--ink2);background:#fff;font-family:var(--font-mono,monospace)}
+
+/* ---------- 空态 ---------- */
+.bigempty{max-width:460px;margin:9vh auto;text-align:center;padding:0 20px}
+.bigempty .ic{width:60px;height:60px;border-radius:16px;background:var(--acc-soft);
+color:var(--acc);display:grid;place-items:center;margin:0 auto 16px}
+.bigempty h3{font-size:16px;font-weight:500;margin-bottom:8px}
+.bigempty p{font-size:13px;color:var(--ink2);margin-bottom:6px}
+.bigempty .acts{display:flex;gap:9px;justify-content:center;margin-top:20px;flex-wrap:wrap}
+.mbd .acts{display:flex;justify-content:center}
+.mbd .acts[style]{flex-direction:column;gap:9px;margin-top:15px}
+
+/* ---------- 弹窗 ---------- */
+.mask{position:fixed;inset:0;background:rgba(26,26,25,.42);display:grid;place-items:center;
+z-index:60;padding:18px}
+.mask[hidden]{display:none}
+.modal{background:var(--card);border-radius:14px;width:100%;max-width:420px;overflow:hidden;
+box-shadow:0 12px 40px rgba(0,0,0,.18)}
+.modal.wide{max-width:540px}
+.mhd{padding:15px 17px 11px;font-size:15px;font-weight:500;display:flex;align-items:center;gap:9px}
+.mhd .ic{width:32px;height:32px;border-radius:9px;background:var(--acc-soft);color:var(--acc);
+display:grid;place-items:center;flex:none}
+.mbd{padding:0 17px 15px;font-size:13px;color:var(--ink2);line-height:1.7}
+.mbd.warn{background:var(--danger-bg);color:var(--danger);margin:0 17px;border-radius:9px;padding:11px 12px}
+.fld{margin-top:13px}
+.fld label{display:block;font-size:12px;color:var(--ink2);margin-bottom:5px}
+.fld input{width:100%;height:40px;padding:0 11px;border:1px solid var(--bd2);border-radius:9px;
+font-size:16px;background:#fff}
+.fld input:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-soft)}
+.mft{display:flex;gap:9px;padding:13px 17px;border-top:1px solid var(--bd);background:#fbfaf8}
+.mft .mbtn{flex:1;height:44px;justify-content:center;border:1px solid var(--bd2);background:#fff}
+/* 恢复主按钮的蓝底 —— 上一条 .mft .mbtn 的白色背景会覆盖 .mbtn.pri，
+   导致白底白字（文字看不见）。这里必须显式重设背景与前景色。 */
+.mft .mbtn.pri{background:var(--acc);color:#fff;border-color:var(--acc);flex:1.4}
+.mft .mbtn.pri:hover{background:#12508f;border-color:#12508f}
+.list{max-height:290px;overflow-y:auto;border:1px solid var(--bd);border-radius:9px;margin-top:7px}
+.li{padding:9px 11px;border-bottom:1px solid var(--bd);cursor:pointer;display:flex;
+align-items:center;gap:9px;font-size:13px}
+.li:last-child{border-bottom:none}
+.li:hover{background:#f7f6f3}
+.li.on{background:var(--acc-soft);color:var(--acc)}
+.li .pth{font-size:11px;color:var(--ink3);margin-top:1px}
+.li .ck{width:17px;height:17px;border-radius:5px;border:1.5px solid var(--bd2);flex:none;
+display:grid;place-items:center}
+.li.on .ck{background:var(--acc);border-color:var(--acc);color:#fff}
+.li.dis{opacity:.35;pointer-events:none}
+
+/* ---------- 浮层 ---------- */
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:26px;z-index:90;
+display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+.tst{background:var(--ink);color:#fff;font-size:13px;padding:9px 15px;border-radius:9px;
+max-width:min(92vw,560px);line-height:1.6;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.22)}
+.tst.err{background:var(--danger)}
+.tst.ok{background:var(--ok)}
+.busy{position:fixed;inset:0;background:rgba(247,247,245,.86);display:grid;place-items:center;
+z-index:80;gap:13px}
+.busy[hidden]{display:none}
+.busy .bx{display:flex;flex-direction:column;align-items:center;gap:13px}
+.spin{width:30px;height:30px;border:2.5px solid var(--bd2);border-top-color:var(--acc);
+border-radius:50%;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.busy .t{font-size:13px;color:var(--ink2)}
+.bbar{width:220px;height:5px;border-radius:3px;background:var(--bd2);overflow:hidden}
+.bfill{height:100%;width:0;background:var(--acc);border-radius:3px;transition:width .18s}
+.mobtn{display:none}
+
+/* ---------- 窄屏 ---------- */
+@media(max-width:768px){
+.hd{gap:8px;padding:0 10px}
+.hd h1{font-size:14px}
+.side{position:absolute;left:0;top:0;bottom:0;z-index:40;transform:translateX(-100%);
+transition:transform .2s;box-shadow:0 0 24px rgba(0,0,0,.14);width:270px}
+.side.open{transform:none}
+.scrim{position:absolute;inset:0;background:rgba(26,26,25,.35);z-index:39}
+.scrim[hidden]{display:none}
+.mobtn{display:grid}
+.bc,.toolbar{padding-left:13px;padding-right:13px}
+/* 顶栏按钮多，窄屏改为整行横向滚动，避免换行后占掉太多垂直空间 */
+.toolbar{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;
+padding-bottom:12px;scrollbar-width:thin;scrollbar-color:var(--bd2) transparent}
+.toolbar::-webkit-scrollbar{height:4px}
+.toolbar::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:2px}
+.toolbar::-webkit-scrollbar-track{background:transparent}
+.toolbar .sp{display:none}
+/* 窄屏隐藏缩略图滑杆（调大小可在设置里输入数值），让位给操作按钮 */
+.tbar-thumb{display:none}
+.tbar-l{flex:0 0 auto}
+.tbar-ops{flex:0 0 auto}
+.gcard{margin:0 13px 14px;border-radius:11px}
+.reconn-bar{margin:0 13px 14px;flex-wrap:wrap;padding:12px 13px}
+.reconn-bar .mbtn{width:100%;justify-content:center}
+:root{--thumb:140px}
+.ghd .act{opacity:1}
+.ib,.mbtn{height:44px}   /* 触控最小点击区 44px */
+.mft .mbtn{height:44px}   /* 弹窗按钮同样要够大，上面的 .mft .mbtn 固定 40px 需在窄屏覆盖 */
+.trow{min-height:44px}
+}
+</style>
+</head>
+<body>
+
+<div class="hd">
+  <button class="ib mobtn" id="mMenu" title="目录">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+  </button>
+  <h1>素材工作台</h1>
+  <span class="pill" id="mPill"><span class="dot"></span><span id="mTxt">检测中</span></span>
+  <div class="sp"></div>
+  <button class="mbtn" id="bRoot" title="选择本地素材根文件夹">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+    <span id="bRootT">选择根文件夹</span>
+  </button>
+  <button class="ib" id="bBackup" title="导出索引备份">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+  </button>
+  <button class="ib" id="bSet" title="设置">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H1a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 2.6 7a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H7a1.6 1.6 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V7a1.6 1.6 0 0 0 1.5 1H23a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>
+  </button>
+</div>
+
+<div class="wrap">
+  <div class="scrim" id="scrim" hidden></div>
+  <aside class="side" id="side">
+    <div class="side-hd">
+      <h2>产品类目</h2>
+      <button class="ib" id="bNewCat" title="新建产品类目">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+    </div>
+    <div class="tree" id="tree"></div>
+  </aside>
+
+  <main class="main" id="main">
+    <!-- 面包屑 + 操作栏打包成一个吸顶整体：单独给各自 sticky 会在滚动时粘住错位 -->
+    <div class="topsticky">
+      <div class="bc" id="bc"></div>
+      <div class="toolbar" id="toolbar"></div>
+    </div>
+    <div id="body"></div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="dzmask">松手即可导入素材（支持整个文件夹）</div>
+
+<div class="mask" id="mask" hidden><div class="modal" id="modal"></div></div>
+
+<div class="busy" id="busy" hidden><div class="bx"><div class="spin"></div><div class="t" id="busyT">处理中</div>
+<div class="bbar" id="busyBar" hidden><div class="bfill" id="busyFill"></div></div>
+<div class="t" id="busyPct" style="font-size:11px"></div></div></div>
+
+<script>
+"use strict";
+/* =====================================================================
+   素材工作台 · 四层：产品类目 / 工厂 / 产品分类 / 素材分组
+   架构分层：storage → calc → render，渲染函数严禁互调，统一走 refreshAll()
+   ===================================================================== */
+
+/* ---------------- 常量 ---------------- */
+/* 层级名称映射：全站文案统一从这里取，改名只改这一处。
+   内部字段名（cat/prod/style/group）与本地文件夹路径保持不变，
+   只改界面显示，因此不涉及数据迁移、不会动已有素材的落盘位置。 */
+var LVL = {
+  cat:   { one:'产品类目', two:'工厂',     three:'产品分类', four:'素材分组' },
+  prod:  { one:'产品类目', two:'工厂',     three:'产品分类', four:'素材分组' },
+  style: { one:'产品类目', two:'工厂',     three:'产品分类', four:'素材分组' }
+};
+var L_CAT='产品类目', L_PROD='工厂', L_STYLE='产品分类', L_GROUP='素材分组';
+var LVL_CHAIN = L_CAT + ' → ' + L_PROD + ' → ' + L_STYLE + ' → ' + L_GROUP;
+var LS_KEY = 'wb_pkmgr_v1';        // 旧结构（兼容读取）
+var LS_TREE = 'wb_pkmgr_tree_v2';   // 新结构：只存目录骨架 + UI
+var IDB_NAME = 'wb_pkmgr_blobs', IDB_STORE = 'blobs', IDB_META = 'meta';
+var GROUP_PRESET = ['产品素材','工厂素材','定制素材'];
+var GCOLORS = ['#185FA5','#0F6E56','#854F0B','#534AB7','#993556','#185FA5'];
+var VID_EXT = ['mp4','mov','avi','mkv','webm','m4v','flv','wmv'];
+var IMG_EXT = ['jpg','jpeg','png','gif','webp','bmp','svg','avif','heic'];
+
+/* ---------------- 状态 ---------------- */
+var S = null;
+var FS = { root:null, rootName:'' };   // FileSystemDirectoryHandle 句柄（内存，不持久化）
+var IDB = { db:null };
+var oid = {};   // 本次会话内的 objectURL，切换节点时回收
+
+/* ---------------- 工具 ---------------- */
+function $(s){ return document.querySelector(s); }
+function el(t,c,h){ var e=document.createElement(t); if(c)e.className=c; if(h!=null)e.innerHTML=h; return e; }
+function uid(p){ return (p||'x')+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function extOf(n){ var m=/\.([A-Za-z0-9]+)$/.exec(n||''); return m?m[1].toLowerCase():''; }
+function baseOf(n){ return (n||'').replace(/\.[A-Za-z0-9]+$/,''); }
+function kindOf(n){ var e=extOf(n); return VID_EXT.indexOf(e)>=0?'video':(IMG_EXT.indexOf(e)>=0?'image':'file'); }
+function fmtSize(b){
+  if(b==null) return '';
+  if(b<1024) return b+' B';
+  if(b<1048576) return (b/1024).toFixed(0)+' KB';
+  if(b<1073741824) return (b/1048576).toFixed(1)+' MB';
+  return (b/1073741824).toFixed(2)+' GB';
+}
+function fmtDate(ts){ if(!ts) return ''; var d=new Date(ts);
+  return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate()); }
+function p2(n){ return n<10?'0'+n:''+n; }
+function clamp(n,a,b){ return n<a?a:(n>b?b:n); }
+
+/* ---------------- IndexedDB ----------------
+   blobs：存文件内容（兜底模式）
+   meta ：存素材元数据（容量远大于 localStorage，5MB 上限不再成为瓶颈）
+   localStorage 只保留轻量的目录树骨架 + UI 偏好            ---------------- */
+/* IndexedDB 连接管理
+   关键：不能永久缓存连接。原实现把 db 存进 IDB.db 后永不检查，
+   一旦连接被浏览器关闭（onclose）或数据库被删除，
+   后续所有读写都会抛 InvalidStateError 且无法自愈。 */
+var _idbPending = null;   // 正在打开中的 Promise，避免并发重复 open
+function idbOpen(){
+  // 连接已失效时丢弃缓存，下次重新打开
+  if(IDB.db){
+    try{ if(IDB.db._closing) return IDB.db; }catch(e){}
+    return Promise.resolve(IDB.db);
+  }
+  if(_idbPending) return _idbPending;
+  _idbPending = new Promise(function(res,rej){
+    var rq;
+    try{ rq = indexedDB.open(IDB_NAME,2); }
+    catch(e){ _idbPending=null; rej(e); return; }
+    rq.onupgradeneeded = function(){
+      var d = rq.result;
+      if(!d.objectStoreNames.contains(IDB_STORE)) d.createObjectStore(IDB_STORE);
+      if(!d.objectStoreNames.contains(IDB_META)) d.createObjectStore(IDB_META);
+    };
+    rq.onsuccess = function(){
+      var db = rq.result;
+      // 连接异常关闭时清缓存，让下次调用能重新打开（否则应用永久失效）
+      db.onclose = function(){ if(IDB.db===db) IDB.db=null; };
+      db.onversionchange = function(){
+        try{ db.close(); }catch(e){}
+        if(IDB.db===db) IDB.db=null;
+      };
+      IDB.db = db; _idbPending = null;
+      res(db);
+    };
+    rq.onerror = function(){ _idbPending=null; rej(rq.error || new Error('IndexedDB 打开失败')); };
+    rq.onblocked = function(){ _idbPending=null; rej(new Error('IndexedDB 被其他标签页占用，请关闭其他页面后重试')); };
+  });
+  return _idbPending;
+}
+// 丢弃连接缓存（数据库被删除/重置时使用）
+function idbReset(){ try{ if(IDB.db) IDB.db.close(); }catch(e){} IDB.db=null; _idbPending=null; }
+function _tx(store, mode){
+  return idbOpen().then(function(d){
+    try{
+      return d.transaction(store, mode).objectStore(store);
+    }catch(e){
+      // 连接已失效：丢弃缓存重开一次，避免永久报错
+      idbReset();
+      return idbOpen().then(function(d2){
+        return d2.transaction(store, mode).objectStore(store);
+      });
+    }
+  });
+}
+function idbPut(k,v){ return _tx(IDB_STORE,'readwrite').then(function(st){ return new Promise(function(res,rej){
+  var rq=st.put(v,k); rq.onsuccess=function(){res()}; rq.onerror=function(){rej(rq.error)};
+});});}
+function idbGet(k){ return _tx(IDB_STORE,'readonly').then(function(st){ return new Promise(function(res,rej){
+  var rq=st.get(k); rq.onsuccess=function(){res(rq.result)}; rq.onerror=function(){rej(rq.error)};
+});});}
+function idbDel(k){ return _tx(IDB_STORE,'readwrite').then(function(st){ return new Promise(function(res,rej){
+  var rq=st.delete(k); rq.onsuccess=function(){res()}; rq.onerror=function(){rej(rq.error)};
+});});}
+/* 素材元数据读写（key = 素材 id） */
+function metaPut(k,v){ return _tx(IDB_META,'readwrite').then(function(st){ return new Promise(function(res,rej){
+  var rq=st.put(v,k); rq.onsuccess=function(){res()}; rq.onerror=function(){rej(rq.error)};
+});});}
+function metaGet(k){ return _tx(IDB_META,'readonly').then(function(st){ return new Promise(function(res,rej){
+  var rq=st.get(k); rq.onsuccess=function(){res(rq.result)}; rq.onerror=function(){rej(rq.error)};
+});});}
+function metaDel(k){ return _tx(IDB_META,'readwrite').then(function(st){ return new Promise(function(res,rej){
+  var rq=st.delete(k); rq.onsuccess=function(){res()}; rq.onerror=function(){rej(rq.error)};
+});});}
+function metaKeys(){ return _tx(IDB_META,'readonly').then(function(st){ return new Promise(function(res,rej){
+  var rq=st.getAllKeys(); rq.onsuccess=function(){res(rq.result||[])}; rq.onerror=function(){rej(rq.error)};
+});});}
+// 批量读全部素材元数据（一次事务，避免逐条串行）
+function metaAll(){ return _tx(IDB_META,'readonly').then(function(st){ return new Promise(function(res,rej){
+  var rq=st.getAll(); rq.onsuccess=function(){res(rq.result||[])}; rq.onerror=function(){rej(rq.error)};
+});});}
+// 批量写：单事务写入多条，比逐条 put 快一个数量级
+function metaPutMany(records){
+  var keys = Object.keys(records);
+  if(!keys.length) return Promise.resolve(0);
+  return _tx(IDB_META,'readwrite').then(function(st){ return new Promise(function(res,rej){
+    var tx = st.transaction;
+    keys.forEach(function(k){ st.put(records[k], k); });
+    tx.oncomplete = function(){ res(keys.length); };
+    tx.onerror = function(){ rej(tx.error); };
+    tx.onabort = function(){ rej(tx.error || new Error('aborted')); };
+  });}).catch(function(){ return -1; });   // -1 表示批量失败
+}
+
+/* ---------------- 存储层 ----------------
+   容量策略（关键）：
+     localStorage 约 5MB 上限，只放目录树骨架 + UI 偏好
+     素材元数据（每个素材一条记录）放 IndexedDB，容量可达数百 MB
+   素材数量上千时 localStorage 会写满导致"保存失败"，必须分离。
+   ------------------------------------------------ */
+// UI 改动（缩略图、折叠、当前选中位置）立即落骨架；
+// 素材元数据走 saveMeta 的去抖批量写入
+// 注意：save() 是所有数据变更的统一出口，索引在此失效，
+// 保证任何结构改动后查找函数都不会拿到脏数据。
+function save(){ invalidateIndex(); saveTree(); saveMeta(); }
+// 目录骨架 + UI：写 localStorage（轻量，同步）
+// 调用方含义是「结构/状态已变更」，所以在这里统一失效 id 索引 ——
+// 否则任何走saveTree 但没走 save() 的路径，都会拿着过期索引查不到新建的节点。
+function saveTree(){
+  invalidateIndex();
+  try{
+    localStorage.setItem(LS_TREE, JSON.stringify({
+      v:1, mode:S.mode, rootName:S.rootName, seq:S.seq, seeded:S.seeded,
+      tree:stripAssets(S.tree), ui:packUI()
+    }));
+  }catch(e){
+    toast('目录结构保存失败：本地存储已满，请导出备份后清理','err');
+  }
+}
+// 素材元数据：异步写 IndexedDB，不阻塞 UI
+// 增量策略：只写"脏"记录（新增/修改过的），避免每次操作全量重写上千条
+var metaTimer = null, metaDirty = {};
+function markDirty(a){ if(a && a.id) metaDirty[a.id]=a; }
+function markAllDirty(){
+  allGroupsOf(S).forEach(function(g){
+    (g.assets||[]).forEach(function(a){ metaDirty[a.id]=a; });
+  });
+}
+function saveMeta(){
+  if(metaTimer) return;
+  metaTimer = setTimeout(function(){
+    metaTimer = null;
+    var batch = metaDirty; metaDirty = {};
+    var ids = Object.keys(batch);
+    if(!ids.length) return;
+    // 优化：原来逐条串行 put（1200 条 = 1200 次事务往返），
+    // 改为单事务批量写
+    var packed = {};
+    ids.forEach(function(id){ packed[id] = packMeta(batch[id]); });
+    metaPutMany(packed).then(function(n){
+      saveTree();
+      if(n === -1) toast('素材索引保存失败，刷新后可能丢失，请立即导出备份','err');
+    });
+  }, 400);
+}
+// 打包元数据（剔除运行时字段，避免存 _u 这类 blob URL）
+function packMeta(a){
+  return {
+    id:a.id, name:a.name, type:a.type, ext:a.ext, size:a.size, w:a.w, h:a.h,
+    ts:a.ts, order:a.order, tags:a.tags||[], missing:!!a.missing,
+    fileName:a.fileName, c:a.c, p:a.p, s:a.s, g:a.g, rel:a.rel||''
+  };
+}
+// 生成不含 assets 的目录骨架
+function stripAssets(tree){
+  return { cats: (tree.cats||[]).map(function(c){
+    return { id:c.id, name:c.name, order:c.order, sample:c.sample,
+      products:(c.products||[]).map(function(p){
+        return { id:p.id, name:p.name, order:p.order, catId:p.catId,
+          styles:(p.styles||[]).map(function(s){
+            return { id:s.id, name:s.name, order:s.order,
+              groups:(s.groups||[]).map(function(g){
+                return { id:g.id, name:g.name, order:g.order, styleId:g.styleId,
+                         colorIdx:g.colorIdx, n:(g.assets||[]).length };
+              }) };
+          }) };
+      }) };
+  }) };
+}
+// 持久化的 UI 状态：选中列表 sel 刻意不保存
+// 上千个素材时 sel 会有上千个 id，写进 localStorage 会迅速吃满配额
+function packUI(){
+  return { cur:S.ui.cur||{}, collapsed:S.ui.collapsed||{}, thumb:S.ui.thumb||220 };
+}
+function nid(p){ S.seq=(S.seq||1)+1; return p+S.seq; }
+/* ---------------- 状态构造与加载 ---------------- */
+function defaultState(){
+  return { v:1, mode:'local', rootName:'', tree:{cats:[]},
+    ui:{ cur:{}, collapsed:{}, thumb:220, sel:{} }, seeded:false, seq:1 };
+}
+function migrate(d){
+  var base = defaultState();
+  d = d||{};
+  d.v=1;
+  d.tree = (d.tree && Array.isArray(d.tree.cats)) ? d.tree : {cats:[]};
+  d.ui = Object.assign(base.ui, d.ui||{});
+  d.ui.cur = d.ui.cur||{}; d.ui.collapsed = d.ui.collapsed||{}; d.ui.sel = d.ui.sel||{};
+  d.ui.thumb = clamp(+d.ui.thumb||220, 100, 420);
+  d.seq = +d.seq||1;
+  d.mode = d.mode==='fs'?'fs':'local';
+  d.rootName = d.rootName||'';
+  d.seeded = !!d.seeded;
+  (function walk(cats){ cats.forEach(function(c){
+    c.products = c.products||[];
+    c.order = +c.order||0;
+    c.products.forEach(function(p){
+      p.styles = p.styles||[]; p.order = +p.order||0;
+      p.styles.forEach(function(s){
+        s.groups = s.groups||[]; s.order = +s.order||0;
+        s.groups.forEach(function(g){
+          g.assets = (g.assets||[]).filter(function(a){ return a && a.id; })
+            .map(function(a){ a.tags=a.tags||[]; a.ts=a.ts||Date.now();
+              a.order=+a.order||0; a.type=a.type||'file'; return a; });
+          g.order = +g.order||0;
+        });
+      });
+    });
+  }); })(d.tree.cats);
+  return d;
+}
+function hasInlineAssets(cats){
+  if(!Array.isArray(cats)) return false;
+  return cats.some(function(c){ return (c.products||[]).some(function(p){
+    return (p.styles||[]).some(function(s){ return (s.groups||[]).some(function(g){
+      return Array.isArray(g.assets) && g.assets.length; }); }); }); });
+}
+function hasAssets(){
+  return allGroupsOf(S).some(function(g){ return (g.assets||[]).length; });
+}
+/* 旧结构迁移：把内嵌素材元数据搬到 IndexedDB */
+function migrateInlineAssets(){
+  var n = 0;
+  (S.tree.cats||[]).forEach(function(c){ (c.products||[]).forEach(function(p){
+    (p.styles||[]).forEach(function(s){ (s.groups||[]).forEach(function(g){
+      (g.assets||[]).forEach(function(a){
+        try{
+          metaPut(a.id, {
+            id:a.id, name:a.name, type:a.type, ext:a.ext, size:a.size, w:a.w, h:a.h,
+            ts:a.ts, order:a.order, tags:a.tags||[], missing:false,
+            fileName:a.fileName, c:a.c, p:a.p, s:a.s, g:a.g, rel:a.rel||''
+          });
+          n++;
+        }catch(e){}
+      });
+      g.n = (g.assets||[]).length;
+      g.assets = [];
+    }); }); }); });
+  return n;
+}
+/* 从 IndexedDB 把素材元数据恢复进各分组 */
+function restoreAssets(){
+  return metaAll().then(function(list){
+    if(!list || !list.length) return 0;
+    var ok = 0, failed = 0;
+    // 优化：原来用串行 Promise 链逐条 get（2400 条 = 2400 次串行事务），
+    // 改为 getAll 一次批量读，耗时从秒级降到毫秒级
+    for(var i=0;i<list.length;i++){
+      var m = list[i];
+      if(!m || !m.id){ failed++; continue; }
+      var g = findGroup(m.g);
+      if(!g){ failed++; continue; }        // 分组已删除，丢弃孤儿记录
+      g.assets = g.assets||[];
+      g.assets.push(m);
+      ok++;
+    }
+    allGroupsOf(S).forEach(function(g){
+      g.assets.sort(function(a,b){ return (a.order||0)-(b.order||0); });
+      g.assets.forEach(function(a,i){ a.order=i; });
+      g.n = g.assets.length;
+    });
+    invalidateIndex();   // 素材已回填到各分组，查找索引需重建
+    if(failed) toast(failed+' 条素材索引已失效（所属分组可能已被删除）','err');
+    return ok;
+  }).catch(function(){ return 0; });
+}
+/* 启动加载：读骨架 → 恢复素材 → 必要时播种示例 */
+function boot(){
+  var d = null;
+  try{
+    var raw = localStorage.getItem(LS_TREE) || localStorage.getItem(LS_KEY);
+    if(raw) d = JSON.parse(raw);
+  }catch(e){ d = null; }
+  if(!d){ S = defaultState(); seedSample(); invalidateIndex(); return Promise.resolve(0); }
+  var legacy = !!(d.tree && hasInlineAssets(d.tree.cats));
+  S = migrate(d);
+  invalidateIndex();   // S 已换成新对象，索引必须重建
+  // 骨架里的 g.n 是上次保存的素材数，恢复后用于空态判断
+  return restoreAssets().then(function(n){
+    if(legacy){
+      var moved = migrateInlineAssets();
+      return restoreAssets().then(function(){
+        if(moved) toast('已把 '+moved+' 个素材索引迁移到浏览器数据库，容量问题已解决','ok');
+        return needReconnect(n);
+      });
+    }
+    // 骨架为空（首次使用或被清库）时才播种示例；骨架完整但无素材是正常状态
+    if(!S.seeded && !S.tree.cats.length) seedSample();
+    return needReconnect(n);
+  });
+}
+/* 浏览器重启后 FileSystemDirectoryHandle 句柄会丢失（只存在内存里），
+   但 S.mode='fs' 是持久化的。此时若不处理：
+     - 顶栏显示「本地模式」，看起来一切正常
+     - 所有素材读取抛错，铺满「本地文件缺失」红色标记
+   所以必须启动即检测并明确告知用户重新连接。 */
+function needReconnect(restored){
+  if(S.mode==='fs' && !FS.root){
+    setTimeout(function(){
+      toast('浏览器重启后需要重新连接本地文件夹。点击右上角「连接本地文件夹」即可恢复，素材索引不会丢失','err');
+    }, 700);
+  }
+  return restored;
+}
+
+/* ---------------- 计算层：查找 ---------------- */
+function allCats(){ return (S && S.tree && Array.isArray(S.tree.cats)) ? S.tree.cats : []; }
+// findCat/findProd/findStyle/findGroup/allProducts/allStyles/allGroups
+// 已统一迁移到 id 索引实现（见下方 index() 相关区块）
+function countAssets(st){ st=st||S; return allGroupsOf(st).reduce(function(n,g){
+  return n + (g.assets?g.assets.length:0); },0); }
+function allGroupsOf(st){
+  var r=[];
+  st = st || S;
+  var cats = (st && st.tree && Array.isArray(st.tree.cats)) ? st.tree.cats : [];
+  cats.forEach(function(c){
+    (c.products||[]).forEach(function(p){ (p.styles||[]).forEach(function(s){
+      (s.groups||[]).forEach(function(g){ r.push(g); }); }); });
+  });
+  return r;
+}
+function allGroupsOf(st){
+  var r=[];
+  st = st || S;
+  var cats = (st && st.tree && Array.isArray(st.tree.cats)) ? st.tree.cats : [];
+  cats.forEach(function(c){
+    (c.products||[]).forEach(function(p){ (p.styles||[]).forEach(function(s){
+      (s.groups||[]).forEach(function(g){ r.push(g); }); }); });
+  });
+  return r;
+}
+
+/* ---------------- id 索引（性能核心） ----------------
+   原来 findGroup / findStyle / findAssetById 每次都遍历整棵树重建数组，
+   在 1200+ 素材时缩略图填充会出现 O(N²)，明显卡顿。
+   这里用「版本号 + 脏标记」维护一次性索引：
+     - 树结构不变（S 引用未换）时直接复用
+     - 任何增删改后调用 invalidateIndex()，下次访问自动重建
+   注意：索引只缓存「对象引用」和「父子关系」，不缓存素材内容。   */
+var _idx = null;          // {cat,prod,style,group,asset:Map, products[], styles[], groups[], styleOfGroup, groupOfAsset}
+function invalidateIndex(){ _idx = null; }
+function index(){
+  if(_idx) return _idx;
+  var m = {
+    cat:{}, prod:{}, style:{}, group:{}, asset:{},
+    products:[], styles:[], groups:[],
+    styleOfGroup:{}, groupOfAsset:{}
+  };
+  var cats = (S && S.tree && Array.isArray(S.tree.cats)) ? S.tree.cats : [];
+  for(var i=0;i<cats.length;i++){
+    var c = cats[i];
+    m.cat[c.id] = c; m.products.push(c);
+    var ps = c.products||[];
+    for(var j=0;j<ps.length;j++){
+      var p = ps[j];
+      m.prod[p.id] = p; m.products.push(p);
+      var ss = p.styles||[];
+      for(var k=0;k<ss.length;k++){
+        var s = ss[k];
+        m.style[s.id] = s; m.styles.push(s);
+        var gs = s.groups||[];
+        for(var q=0;q<gs.length;q++){
+          var g = gs[q];
+          m.group[g.id] = g; m.groups.push(g);
+          m.styleOfGroup[g.id] = s;
+          var as = g.assets||[];
+          for(var z=0;z<as.length;z++){
+            m.asset[as[z].id] = as[z];
+            m.groupOfAsset[as[z].id] = g;
+          }
+        }
+      }
+    }
+  }
+  _idx = m;
+  return m;
+}
+// 常用查找改为索引命中
+function findCat(id){ return id ? (index().cat[id] || null) : null; }
+function findProd(id){ return id ? (index().prod[id] || null) : null; }
+function findStyle(id){ return id ? (index().style[id] || null) : null; }
+function findGroup(id){ return id ? (index().group[id] || null) : null; }
+function findAssetById(id){ return id ? (index().asset[id] || null) : null; }
+function groupOfAsset(id){ return id ? (index().groupOfAsset[id] || null) : null; }
+function styleOfGroup(id){ return id ? (index().styleOfGroup[id] || null) : null; }
+function allProducts(){ return index().products; }
+function allStyles(){ return index().styles; }
+function allGroups(){ return index().groups; }
+// 类目/工厂/分类删除后需要清理指向它们的索引
+function dropIndexByIds(catId, prodId, styleId, groupId){
+  if(catId) delete index().cat[catId];
+  if(prodId) delete index().prod[prodId];
+  if(styleId){ delete index().style[styleId]; }
+  if(groupId){
+    var m = index();
+    delete m.group[groupId];
+    delete m.styleOfGroup[groupId];
+    // 该组下素材索引一并移除
+    var g = S && null;
+    allGroups().forEach(function(x){
+      if(x.id===groupId) (x.assets||[]).forEach(function(a){ delete m.asset[a.id]; delete m.groupOfAsset[a.id]; });
+    });
+  }
+  invalidateIndex();   // 结构变了，整体重建最稳妥
+}
+function prodOfStyle(sid){ var pr=allProducts(); for(var i=0;i<pr.length;i++){
+  if((pr[i].styles||[]).some(function(s){return s.id===sid;})) return pr[i]; } return null; }
+function catOfStyle(sid){ var p=prodOfStyle(sid); return p?findCat(p.catId):null; }
+function cur(){ var u=S.ui.cur; return { cat:findCat(u.catId), prod:findProd(u.prodId), style:findStyle(u.styleId) }; }
+function curGroup(){ return uG(); }
+function uG(){ return S.ui.cur.groupId ? findGroup(S.ui.cur.groupId) : null; }
+function sortBy(arr,k){ return arr.slice().sort(function(a,b){ return (a[k]||0)-(b[k]||0); }); }
+
+/* ---------------- 落盘路径映射（四元组 → 本地文件夹） ---------------- */
+function pathOf(cat,prod,style,grp){
+  return [cat.name, prod.name, style.name, grp.name];
+}
+function safeName(n){ return String(n||'未命名').replace(/[\\/:*?"<>|\x00-\x1f]/g,'_').trim() || '未命名'; }
+
+/* ---------------- 文件系统（File System Access API） ---------------- */
+function fsSupported(){ return typeof window.showDirectoryPicker==='function'; }
+// 是否具备"拖入文件夹"的任一能力（Edge 走 handle，Chrome 走 entry）
+function canHandleFolder(){
+  try{
+    if(typeof DataTransferItem !== 'undefined'){
+      if(typeof DataTransferItem.prototype.getAsFileSystemHandle === 'function') return true;
+      if(typeof DataTransferItem.prototype.webkitGetAsEntry === 'function') return true;
+    }
+  }catch(e){}
+  return false;
+}
+function fsGrant(){
+  if(!FS.root) return Promise.resolve(false);
+  return FS.root.queryPermission({mode:'readwrite'}).then(function(p){
+    if(p==='granted') return true;
+    return FS.root.requestPermission({mode:'readwrite'}).then(function(q){ return q==='granted'; });
+  }).catch(function(){ return false; });
+}
+function fsGrantedNow(){ return !!FS.root; }
+async function fsDir(parts, create){
+  var d = FS.root;
+  for(var i=0;i<parts.length;i++){
+    d = await d.getDirectoryHandle(safeName(parts[i]), {create:!!create});
+  }
+  return d;
+}
+async function fsWrite(parts, fileName, blob){
+  var d = await fsDir(parts, true);
+  var fh = await d.getFileHandle(fileName, {create:true});
+  var w = await fh.createWritable();
+  await w.write(blob); await w.close();
+  return pathOf.apply(null, parts).concat(fileName).join('/');
+}
+async function fsRead(parts, fileName){
+  var d = await fsDir(parts, false);
+  var fh = await d.getFileHandle(fileName, {create:false});
+  return await fh.getFile();
+}
+async function fsDel(parts, fileName){
+  var d = await fsDir(parts, false);
+  await d.removeEntry(fileName);
+}
+async function fsUniqName(parts, name, ext){
+  // 同名保护：绝不覆盖其他产品/分组的同名文件
+  var base = safeName(name), n = base, i = 1;
+  var d = null;
+  try{ d = await fsDir(parts,false); }catch(e){ d=null; }
+  while(true){
+    var fn = n + (ext?('.'+ext):'');
+    if(d){
+      try{ await d.getFileHandle(fn,{create:false}); }
+      catch(e){ return fn; }   // 不存在 → 可用
+    } else return fn;
+    n = base+'_'+(++i);
+  }
+}
+
+/* ---------------- 图片压缩 ---------------- */
+function shrink(file, max){
+  max = max||1000;
+  return new Promise(function(res){
+    if(kindOf(file.name)!=='image' || !/^image\//.test(file.type||'')) return res({blob:file, w:0, h:0});
+    var fr = new FileReader();
+    fr.onload = function(){
+      var im = new Image();
+      im.onload = function(){
+        var w = im.width, h = im.height;
+        if(w<=max && file.size<900*1024) return res({blob:file,w:w,h:h});
+        var r = Math.min(1, max/Math.max(w,h));
+        var cw = Math.max(1, Math.round(w*r)), ch = Math.max(1, Math.round(h*r));
+        var cv = document.createElement('canvas'); cv.width=cw; cv.height=ch;
+        cv.getContext('2d').drawImage(im,0,0,cw,ch);
+        cv.toBlob(function(b){
+          if(b && b.size<file.size) res({blob:b,w:cw,h:ch});
+          else res({blob:file,w:w,h:h});
+        },'image/jpeg',0.82);
+      };
+      im.onerror = function(){ res({blob:file,w:0,h:0}); };
+      im.src = fr.result;
+    };
+    fr.onerror = function(){ res({blob:file,w:0,h:0}); };
+    fr.readAsDataURL(file);
+  });
+}
+
+/* ---------------- 缩略图 URL 管理 ---------------- */
+function revOid(id){ if(oid[id]){ URL.revokeObjectURL(oid[id]); delete oid[id]; } }
+function clearOids(){ Object.keys(oid).forEach(revOid); }
+/* 判断当前是否为 file:// 协议。
+   在 file:// 下页面 origin 为 null，URL.createObjectURL 会生成 "blob:null/xxx"，
+   Edge 会直接拒绝加载（Not allowed to load local resource），图片永远不显示。
+   因此 file:// 下图片必须转成 dataURL 内联，其余情况仍用 objectURL（更省内存）。 */
+var IS_FILE_PROTO = location.protocol === 'file:';
+
+function blobToDataURL(blob){
+  return new Promise(function(res, rej){
+    var fr = new FileReader();
+    fr.onload = function(){ res(fr.result); };
+    fr.onerror = function(){ rej(fr.error || new Error('read failed')); };
+    fr.readAsDataURL(blob);
+  });
+}
+// 生成可用于 <img src> 的地址；file:// 下图片走 dataURL
+async function blobToSrc(b, forImage){
+  if(IS_FILE_PROTO && forImage) return await blobToDataURL(b);
+  return URL.createObjectURL(b);
+}
+
+async function thumbUrl(a){
+  if(a._u) return a._u;
+  var u = null;
+  a.fsOffline = false;
+  try{
+    if(S.mode==='fs'){
+      // 句柄只在内存中，浏览器重启后为 null —— 这是「暂时读不到」而非「文件丢失」
+      if(!FS.root){ a.missing=true; a.fsOffline=true; return null; }
+      var c=findCat(a.c), p=findProd(a.p), s=findStyle(a.s), g=findGroup(a.g);
+      if(!c||!p||!s||!g){ a.missing=true; return null; }
+      var f = await fsRead(pathOf(c,p,s,g), a.fileName);
+      u = await blobToSrc(f, a.type==='image');
+      if(!IS_FILE_PROTO){ oid[a.id]=u; }
+    }else{
+      var b = await idbGet(a.id);
+      if(b){
+        u = await blobToSrc(b, a.type==='image');
+        if(!IS_FILE_PROTO){ oid[a.id]=u; }
+      }
+      else a.missing = true;          // 记录实际存在，渲染层据此标记
+    }
+  }catch(e){
+    a.missing = true; u = null;
+    // 权限被拒 / 目录被移走 → 也归为「待重连」而非「文件缺失」
+    if(S.mode==='fs') a.fsOffline = true;
+  }
+  if(u){ a._u=u; a.missing=false; }
+  return u;
+}
+function dropAssetCache(){ clearOids(); allGroupsOf(S).forEach(function(g){
+  (g.assets||[]).forEach(function(a){ a._u=null; }); }); }
+
+/* ---------------- 提示 / 忙碌 ---------------- */
+function toast(msg, type){
+  var box = $('#toast'); var t = el('div','tst'+(type?' '+type:''),esc(msg));
+  box.appendChild(t);
+  var long = String(msg).length > 30;
+  setTimeout(function(){ t.style.transition='opacity .3s'; t.style.opacity='0';
+    setTimeout(function(){ t.remove(); },320); }, type==='err'? (long?9000:5000) :2600);
+}
+function busy(on, txt, pct){
+  var b=$('#busy');
+  if(on){
+    $('#busyT').textContent = txt||'处理中';
+    var bar = $('#busyBar');
+    if(pct!=null && bar){
+      bar.hidden=false;
+      $('#busyFill').style.width = clamp(pct,0,100)+'%';
+      $('#busyPct').textContent = Math.round(pct)+'%';
+    }else if(bar){ bar.hidden=true; $('#busyPct').textContent=''; }
+    b.hidden=false;
+  }
+  else b.hidden=true;
+}
+
+/* ---------------- 弹窗基座 ---------------- */
+function closeModal(){ $('#mask').hidden = true; $('#modal').innerHTML=''; }
+function openModal(opt){
+  var m = $('#modal'); m.className = 'modal'+(opt.wide?' wide':'');
+  var h = '<div class="mhd">'+
+    (opt.icon||'')+'<span>'+esc(opt.title)+'</span></div>'+
+    '<div class="mbd">'+(opt.warn?'<div class="mbd warn">'+opt.warn+'</div>':'')+
+    (opt.body||'')+'</div>'+
+    '<div class="mft">'+
+      (opt.cancel===false?'':'<button class="mbtn" data-x="c">'+esc(opt.cancelText||'取消')+'</button>')+
+      '<button class="mbtn pri" data-x="ok">'+esc(opt.okText||'确定')+'</button>'+
+    '</div>';
+  m.innerHTML = h; $('#mask').hidden = false;
+  var inp = m.querySelector('input'); if(inp){ setTimeout(function(){ inp.focus(); inp.select&&inp.select(); },60); }
+  m.querySelector('[data-x="c"]') && m.querySelector('[data-x="c"]').addEventListener('click', closeModal);
+  m.querySelector('[data-x="ok"]').addEventListener('click', function(){ opt.onOk && opt.onOk(m); });
+  return m;
+}
+$('#mask').addEventListener('click', function(e){ if(e.target===this) closeModal(); });
+document.addEventListener('keydown', function(e){ if(e.key==='Escape' && !$('#mask').hidden) closeModal(); });
+
+/* =====================================================================
+   渲染层 —— 所有渲染函数只读数据、只写 DOM，彼此绝不互调
+   ===================================================================== */
+
+/* ---------- 顶栏状态 ---------- */
+function renderStatus(){
+  var pill=$('#mPill'), txt=$('#mTxt');
+  if(S.mode==='fs'){
+    if(FS.root){
+      pill.className='pill ok';
+      txt.textContent = '本地已连接 · '+FS.rootName;
+      $('#bRootT').textContent = '更换根文件夹';
+    }else{
+      // 句柄只在内存里，浏览器重启后必然丢失 —— 必须如实告知，不能显示成「本地模式」
+      pill.className='pill warn';
+      txt.textContent = '待重新连接本地文件夹';
+      $('#bRootT').textContent = '重新连接本地文件夹';
+    }
+  }else{
+    // 未授权根文件夹 = 素材存在浏览器里，不是真正的本地文件夹
+    pill.className='pill warn';
+    txt.textContent = IS_FILE_PROTO ? '未连接本地文件夹' : '浏览器存储模式';
+    $('#bRootT').textContent='连接本地文件夹';
+  }
+}
+
+/* ---------- M1 目录树 ---------- */
+/* ---------- M1 目录树 ----------
+   素材计数只算一次并向下传递：cat 节点算好总数，
+   prod/style 节点直接复用，避免同一棵子树被遍历 3 遍。 */
+function treeNodeHTML(node, depth){
+  var h='';
+  if(node.t==='cat'){
+    var c=node.c, p=sortBy(c.products||[],'order');
+    h += '<div class="tnode"><div class="trow'+(S.ui.cur.catId===c.id?' cur':'')+'" data-k="cat" data-id="'+c.id+'">'
+      + ic('folder',14)+'<span class="nm">'+esc(c.name)+'</span>'
+      + '<span class="cnt">'+(node.cnt||0)+'</span>'
+      + '<button class="mini" data-act="addprod" data-id="'+c.id+'" title="新建工厂">'+ic('plus',13)+'</button>'
+      + '</div>';
+    if(p.length){
+      h += '<div class="tkids">';
+      p.forEach(function(pp){ h += treeNodeHTML({t:'prod',p:pp}, depth+1); });
+      h += '</div>';
+    }
+    h += '</div>';
+  }else if(node.t==='prod'){
+    var p2v=node.p, st=sortBy(p2v.styles||[],'order');
+    // 本工厂总数 = 各产品分类之和（只此一层再算一次，供类目节点用）
+    var pcnt = st.reduce(function(n,s){ return n + countAssetsOfStyle(s); },0);
+    h += '<div class="tnode"><div class="trow'+(S.ui.cur.prodId===p2v.id?' cur':'')+'" data-k="prod" data-id="'+p2v.id+'">'
+      + ic('box',14)+'<span class="nm">'+esc(p2v.name)+'</span>'
+      + '<span class="cnt">'+pcnt+'</span>'
+      + '<button class="mini" data-act="addstyle" data-id="'+p2v.id+'" title="新建产品分类">'+ic('plus',13)+'</button>'
+      + '</div>';
+    if(st.length){
+      h += '<div class="tkids">';
+      st.forEach(function(ss){
+        var sc = countAssetsOfStyle(ss);
+        h += treeNodeHTML({t:'style',s:ss,cnt:sc}, depth+1);
+      });
+      h += '</div>';
+    }
+    h += '</div>';
+  }else{
+    var s=node.s;
+    h += '<div class="tnode"><div class="trow'+(S.ui.cur.styleId===s.id?' cur':'')+'" data-k="style" data-id="'+s.id+'">'
+      + ic('tag',14)+'<span class="nm">'+esc(s.name)+'</span>'
+      + '<span class="cnt">'+(node.cnt||0)+'</span></div></div>';
+  }
+  return h;
+}
+function ic(n, sz){
+  sz = sz||16;
+  var P = {
+    folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+    box:'<path d="M3 8l9-5 9 5v8l-9 5-9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>',
+    tag:'<path d="M20 12l-8 8-9-9V4h7z"/><circle cx="7.5" cy="7.5" r="1.2"/>',
+    plus:'<path d="M12 5v14M5 12h14"/>',
+    imgs:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 15l5-5 4 4 3-3 6 6"/><circle cx="8.5" cy="8.5" r="1.3"/>',
+    vid:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5l5 2.5-5 2.5z"/>',
+    doc:'<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>',
+    chev:'<path d="M9 6l6 6-6 6"/>',
+    x:'<path d="M6 6l12 12M18 6L6 18"/>',
+    trash:'<path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/>',
+    edit:'<path d="M4 20h4L20 8l-4-4L4 16v4z"/>',
+    sort:'<path d="M7 4v16m0 0l-3-3m3 3l3-3M17 20V4m0 0l-3 3m3-3l3 3"/>',
+    check:'<path d="M4 12l5 5L20 6"/>',
+    layers:'<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>',
+    warn:'<path d="M12 3l9 16H3z"/><path d="M12 9v5M12 17.2v.2"/>',
+    up:'<path d="M12 19V5m0 0l-6 6m6-6l6 6"/>',
+    down:'<path d="M12 5v14m0 0l-6-6m6 6l6-6"/>',
+    grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>'
+  };
+  return '<svg width="'+sz+'" height="'+sz+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+(P[n]||'')+'</svg>';
+}
+function renderTree(){
+  var box=$('#tree');
+  if(!allCats().length){
+    box.innerHTML = '<div class="emptyt">还没有产品类目<br>点击上方 + 新建一个</div>';
+    return;
+  }
+  var h='';
+  sortBy(allCats(),'order').forEach(function(c){
+    var cnt = (c.products||[]).reduce(function(n,p){
+      return n + (p.styles||[]).reduce(function(m,s){ return m + countAssetsOfStyle(s); },0); },0);
+    h += treeNodeHTML({t:'cat',c:c,cnt:cnt},0);
+  });
+  box.innerHTML = h;
+}
+function countAssetsOfStyle(s){
+  return (s.groups||[]).reduce(function(n,g){ return n + (g.assets?g.assets.length:0); },0);
+}
+
+/* ---------- 面包屑 + 工具栏 ---------- */
+function renderCrumb(){
+  var c=cur(), box=$('#bc');
+  var seg=[];
+  if(c.cat) seg.push('<span class="cur"><b>'+esc(c.cat.name)+'</b></span>');
+  if(c.prod) seg.push('<span class="sep">/</span><span class="'+(c.style?'cur':'')+'"><b>'+esc(c.prod.name)+'</b></span>');
+  if(c.style) seg.push('<span class="sep">/</span><span class="cur"><b>'+esc(c.style.name)+'</b></span>');
+  box.innerHTML = seg.length ? seg.join(' ') : '<span style="color:var(--ink3)">请在左侧选择产品分类</span>';
+}
+function renderToolbar(){
+  var box=$('#toolbar'), c=cur();
+  if(!c.style){ box.innerHTML=''; return; }
+  var gs = c.style.groups||[];
+  var n = gs.reduce(function(a,g){ return a + (g.assets?g.assets.length:0); },0);
+  var selN = 0;
+  gs.forEach(function(g){ (g.assets||[]).forEach(function(a){ if(S.ui.sel[a.id]) selN++; }); });
+  var sid = c.style.id;
+
+  var left = '<div class="tbar-l tbar-thumb">'+ic('layers',14)+'素材缩略图大小'
+    + '<input type="range" id="thR" min="100" max="420" step="10" value="'+S.ui.thumb+'">'
+    + '<span style="font-variant-numeric:tabular-nums;min-width:34px">'+S.ui.thumb+'px</span></div>';
+
+  // 选中态操作区：有选中时才出现
+  // 按钮语义：未全选 → 「全选本产品分类」；已全选 → 「取消选择」，两者不同时出现
+  var allSel = selN > 0 && selN === n;
+  var selOps = selN
+    ? '<span class="tbar-sel">已选 <b>'+selN+'</b> 个</span>'
+      + (allSel
+          ? '<button class="mbtn" data-gselall="'+sid+'">取消选择</button>'
+          : '<button class="mbtn" data-gselall="'+sid+'">全选本产品分类</button>')
+      + '<button class="mbtn danger" data-gdelsel="'+sid+'">'+ic('trash',15)+'删除所选</button>'
+      + '<span class="tbar-div"></span>'
+    // 未选中时也保留全选入口，方便一键批量操作
+    : (n ? '<button class="mbtn" data-gselall="'+sid+'">'+ic('check',15)+'全选本产品分类</button>' : '');
+
+  // 注意：「全选/取消」只在有选中时出现（见上方 selOps），此处不重复放
+  var right = selOps
+    + '<button class="mbtn" data-a="sortstyle">'+ic('sort',15)+'分类排序</button>'
+    + '<button class="mbtn" data-a="addgroup">'+ic('plus',15)+'新增分组</button>'
+    + '<button class="mbtn pri" data-a="pick">'+ic('plus',15)+'添加素材</button>';
+
+  box.innerHTML = left + '<div class="sp" style="flex:1"></div>'
+    + '<div class="tbar-l">共 <b style="color:var(--ink);font-weight:500">'+n+'</b> 个素材 · '
+    + gs.length+' 个分组</div>'
+    + '<div class="tbar-ops">'+right+'</div>';
+
+  var r=$('#thR');
+  if(r) r.addEventListener('input', function(){
+    S.ui.thumb = +r.value; save();
+    document.documentElement.style.setProperty('--thumb', S.ui.thumb+'px');
+    var lb=r.nextElementSibling; if(lb) lb.textContent = S.ui.thumb+'px';
+  });
+}
+
+/* ---------- M2 分组卡 ---------- */
+function groupCardHTML(g, gi){
+  var col = GCOLORS[g.colorIdx!=null?g.colorIdx % GCOLORS.length : gi % GCOLORS.length];
+  var assets = sortBy(g.assets||[],'order');
+  var cl = S.ui.collapsed[g.id] ? ' cl' : '';
+  var h = '<div class="gcard'+cl+'" data-g="'+g.id+'" style="--gc:'+col+'">';
+  h += '<div class="ghd" data-tog="'+g.id+'">'
+    + '<span style="color:'+col+';display:flex;transition:transform .15s'+(S.ui.collapsed[g.id]?';transform:rotate(-90deg)':'')+'">'+ic('chev',14)+'</span>'
+    + '<h3>'+esc(g.name)+'</h3>'
+    + '<span class="gbadge" style="background:'+col+'1a;color:'+col+'">'+assets.length+'</span>'
+    + '<div class="act">'
+      + '<button class="ib" data-gact="up" data-id="'+g.id+'" title="上移">'+ic('up',14)+'</button>'
+      + '<button class="ib" data-gact="down" data-id="'+g.id+'" title="下移">'+ic('down',14)+'</button>'
+      + '<button class="ib" data-gact="rename" data-id="'+g.id+'" title="重命名">'+ic('edit',14)+'</button>'
+      + '<button class="ib" data-gact="del" data-id="'+g.id+'" title="删除分组">'+ic('trash',14)+'</button>'
+    + '</div></div>';
+  h += '<div class="gbody">';
+  var isEmpty = !assets.length;
+  h += '<div class="gdrop"'+(isEmpty?' style="display:none"':'')+' data-drop="'+g.id+'">'
+    + '<span>松手即可导入到「'+esc(g.name)+'」（支持整个文件夹）</span></div>';
+  if(!assets.length){
+    h += '<div class="addcell big" data-drop="'+g.id+'">'
+      + ic('imgs',24)
+      + '<div style="font-size:13px;color:var(--ink)">拖入素材或<b>整个文件夹</b></div>'
+      + '<span>或 Ctrl+V 粘贴 · 点击选择</span></div>';
+  }else{
+    // 三类素材分区展示（按类型自动区分）
+    // 优化：原来对每个类型各做一次 filter（3 遍遍历），
+    // 改为单次遍历分桶，300 张素材时省掉 2/3 的比较开销
+    var LABEL={image:'图片',video:'视频',file:'文件'};
+    var buckets={image:[],video:[],file:[]};
+    for(var bi=0; bi<assets.length; bi++){
+      var ba = assets[bi];
+      (buckets[ba.type] || buckets.file).push(ba);
+    }
+    var order=['image','video','file'];
+    order.forEach(function(t){
+      var list = buckets[t];
+      if(!list.length) return;
+      h += '<div class="gsec">'+ic(t==='image'?'imgs':(t==='video'?'vid':'doc'),13)
+        + '<span>'+LABEL[t]+'</span><span class="ln"></span><span class="n">'+list.length+'</span></div>';
+      // 超大分组分页渲染：避免一次生成上千个 DOM 节点拖慢页面
+      var PAGE = (S.ui.more && S.ui.more[g.id]) ? S.ui.more[g.id] : 300;
+      var shown = list.slice(0, PAGE);
+      h += '<div class="grid">';
+      shown.forEach(function(a){ h += cellHTML(a, g.id); });
+      h += '<div class="addcell" data-drop="'+g.id+'">'+ic('plus',20)+'<span>添加</span></div>';
+      h += '</div>';
+      if(list.length > PAGE){
+        h += '<button class="mload" data-more="'+g.id+'">还有 '+(list.length-PAGE)+' 个素材，点击加载更多</button>';
+      }
+    });
+  }
+  h += '</div></div>';
+  return h;
+}
+function cellHTML(a, gid){
+  var sel = (S.ui.sel[a.id]||0)===1;
+  var icn = a.type==='image'?ic('imgs',22):(a.type==='video'?ic('vid',22):ic('doc',22));
+  var meta = a.type==='image' && a.w
+      ? (a.w+'×'+a.h+' · '+fmtSize(a.size))
+      : (fmtSize(a.size)+' · '+fmtDate(a.ts));
+  var src = a.rel ? '<span class="src" title="来自文件夹：'+esc(a.rel)+'">'+esc(dirOfRel(a.rel))+'</span>' : '';
+  var h='<div class="cell'+(sel?' sel':'')+'" data-a="'+a.id+'" data-g="'+gid+'">'
+    + '<div class="thumb" data-open="'+a.id+'">'
+    +   (a.missing
+          ? '<div class="miss">'+ic('warn',20)+'<span>本地文件缺失</span></div>'
+          : '<span class="ph">'+'<span class="vph">'+icn+'</span>'+esc(a.ext||'未知')+'</span><img data-img="'+a.id+'" alt="" hidden>')
+    + '</div>'
+    + '<button class="chk" data-pick="'+a.id+'">'+(sel?ic('check',13):'')+'</button>'
+    + '<div class="cmeta"><div class="cname" title="'+esc(a.name)+'">'+esc(a.name||baseOf(a.fileName))+'</div>'
+    + '<div class="csub"><span>'+esc(meta)+'</span>'+src
+    + (a.tags&&a.tags.length?'<span class="tg">· '+esc(a.tags.join(' '))+'</span>':'')+'</div></div></div>';
+  return h;
+}
+function dirOfRel(rel){
+  var s = String(rel||'').replace(/\/[^/]*$/,'');
+  if(!s) return '';
+  var parts = s.split('/');
+  // 去掉最外层（拖入的根目录名），只显示内部的子目录层级
+  if(parts.length > 2) return parts.slice(1,3).join('/');
+  return parts.slice(-1)[0] || '';
+}
+function renderBody(){
+  var box=$('#body'), c=cur();
+  // 待重连横幅：句柄只在内存中，重启后必然失效。给常驻入口而不是只靠一闪而过的提示
+  var banner = (S.mode==='fs' && !FS.root)
+    ? '<div class="reconn-bar">'+ic('warn',17)
+      + '<div><b>需要重新连接本地文件夹</b><br>'
+      + '<span>浏览器重启后文件夹授权会失效，素材索引仍完整保留在本地，重新连接即可恢复显示。</span></div>'
+      + '<button class="mbtn pri" data-a="root">'+ic('folder',15)+'重新连接</button></div>'
+    : '';
+  if(!c.cat){
+    box.innerHTML = banner + '<div class="bigempty"><div class="ic">'+ic('layers',28)+'</div>'
+      + '<h3>先建一个产品类目</h3>'
+      + '<p>产品类目 → 工厂 → 产品分类 → 素材分组，四层逐级往下，素材不会串。</p>'
+      + '<div class="acts"><button class="mbtn pri" data-a="newcat">'+ic('plus',15)+'新建产品类目</button></div></div>';
+    return;
+  }
+  if(!c.prod){
+    box.innerHTML=banner+'<div class="bigempty"><div class="ic">'+ic('box',28)+'</div>'
+      +'<h3>这个类目还是空的</h3><p>先在左侧点 + 新建工厂，或点下面按钮。</p>'
+      +'<div class="acts"><button class="mbtn pri" data-a="addprod" data-id="'+c.cat.id+'">'+ic('plus',15)+'新建工厂</button></div></div>';
+    return;
+  }
+  if(!c.style){
+    box.innerHTML=banner+'<div class="bigempty"><div class="ic">'+ic('tag',28)+'</div>'
+      +'<h3>为「'+esc(c.prod.name)+'」新建产品分类</h3><p>产品分类是素材的归属单位，不同分类之间素材严格隔离。</p>'
+      +'<div class="acts"><button class="mbtn pri" data-a="addstyle" data-id="'+c.prod.id+'">'+ic('plus',15)+'新建产品分类</button></div></div>';
+    return;
+  }
+  var gs = c.style.groups||[];
+  var h='';
+  h = banner;
+  if(!gs.length){
+    h += '<div class="bigempty"><div class="ic">'+ic('imgs',28)+'</div>'
+      + '<h3>建立第一个素材分组</h3>'
+      + '<p>系统已为你预置「产品素材 / 工厂素材 / 定制素材」三组，也可以按自己的业务新增。</p>'
+      + '<div class="acts"><button class="mbtn pri" data-a="preset">'+ic('layers',15)+'一键建立预置分组</button>'
+      + '<button class="mbtn" data-a="addgroup">'+ic('plus',15)+'新建分组</button></div></div>';
+  }else{
+    h += sortBy(gs,'order').map(groupCardHTML).join('');
+  }
+  box.innerHTML = h;
+  loadThumbs(box);
+}
+// 异步填充缩略图（不参与渲染调用链，独立自跑）
+// 素材多时只先加载可视区附近的卡片，避免一次性转换上千张图导致卡顿
+var LAZY_BATCH = 60, lazyQueue = [], lazyTimer = null;
+function loadThumbs(scope){
+  var root = scope||$('#body');
+  var imgs = root.querySelectorAll('img[data-img]');
+  Array.prototype.forEach.call(imgs, function(im){ pushLazy(im); });
+  drainLazy();
+}
+function pushLazy(im){
+  if(im.__bound) return;
+  im.__bound = true;
+  im.addEventListener('error', function(){
+    im.hidden = true;
+    var ph = im.parentNode.querySelector('.ph');
+    if(ph){
+      ph.style.display='';
+      ph.innerHTML = '<span class="vph">'+ic('warn',18)+'</span>预览不可用<br><span style="font-size:10px">可点开查看详情</span>';
+    }
+  });
+  lazyQueue.push(im);
+  // 视口内的优先
+  try{
+    var r = im.getBoundingClientRect();
+    if(r.top < (window.innerHeight||900) + 400) im.__near = true;
+  }catch(e){}
+}
+function drainLazy(){
+  if(lazyTimer) return;
+  var tick = function(){
+    var n = 0;
+    // 先处理视口内的
+    for(var i=0;i<lazyQueue.length && n<LAZY_BATCH;i++){
+      if(lazyQueue[i].__near) n += fillOne(lazyQueue.splice(i,1)[0]);
+    }
+    // 再处理其余
+    for(var j=0;j<lazyQueue.length && n<LAZY_BATCH;j++){
+      n += fillOne(lazyQueue.splice(j,1)[0]);
+    }
+    if(lazyQueue.length){ lazyTimer = setTimeout(function(){ lazyTimer=null; tick(); }, 30); }
+    else lazyTimer = null;
+  };
+  lazyTimer = setTimeout(function(){ lazyTimer=null; tick(); }, 16);
+}
+function fillOne(im){
+  var id = im.getAttribute('data-img');
+  // 原来每次都遍历全树找素材（O(素材总数)），1200 张时形成 O(N²)
+  // 现在走 id 索引，O(1)
+  var a = findAssetById(id);
+  if(!a) return 0;
+  thumbUrl(a).then(function(u){
+    if(u){
+      im.src = u; im.hidden = false;
+      var ph = im.parentNode.querySelector('.ph'); if(ph) ph.style.display='none';
+    }else if(a.missing){
+      var cell = im.closest('.cell');
+      if(cell && !cell.querySelector('.miss')){
+        var box = cell.querySelector('.thumb');
+        if(!box) return;
+        // 关键区分：未重连句柄 ≠ 文件真的丢了。
+        // 浏览器重启后句柄失效会读不到文件，但文件在硬盘上完好，
+        // 此时标「文件缺失」会让用户误以为素材丢了、去重新导入，务必区分。
+        if(a.fsOffline){
+          box.innerHTML = '<div class="miss soft">'+ic('warn',20)+'<span>待重连文件夹</span></div>';
+        }else{
+          box.innerHTML = '<div class="miss">'+ic('warn',20)+'<span>本地文件缺失</span></div>';
+        }
+      }
+    }
+  });
+  return 1;
+}
+
+/* =====================================================================
+   M3 素材添加（三通道：粘贴 / 点选 / 拖拽）
+   归属强校验：必须锁定 类目|工厂|分类|分组 四元组，未锁定先弹选择器
+   ===================================================================== */
+var addCtx = { groupId:null, pending:null };
+
+function needCtx(gid){
+  var g = gid ? findGroup(gid) : null;
+  var c = cur();
+  if(!c.style){ toast('请先在左侧选择产品分类','err'); return null; }
+  // 归属校验：分组必须存在，且与当前产品分类上下文匹配
+  if(g && g.styleId === c.style.id) return g;
+  var gs = sortBy(c.style.groups||[],'order');
+  if(!gs.length){ toast('请先建立素材分组','err'); return null; }
+  if(gs.length===1) return gs[0];
+  // 多个分组：必须让用户明确选择，不允许存到未知位置
+  openModal({ title:'选择素材归属分组',
+    body:'<div style="margin-top:8px;font-size:12px;color:var(--ink3)">'
+      +'当前产品分类：<b style="color:var(--ink)">'+esc(c.style.name)+'</b> · 素材必须明确归属，不允许保存到未知位置。</div>'
+      +'<div class="list">'+gs.map(function(gg){
+          return '<div class="li" data-pg="'+gg.id+'"><span class="ck">'+ic('check',11)+'</span>'
+            +'<div><div>'+esc(gg.name)+'</div><div class="pth">'+((gg.assets||[]).length)+' 个素材</div></div></div>';
+        }).join('')+'</div>',
+    cancel:false, okText:'取消',
+    onOk:function(){ closeModal(); }
+  });
+  var m=$('#modal');
+  m.addEventListener('click', function(e){
+    var li = e.target.closest('[data-pg]'); if(!li) return;
+    var target = findGroup(li.getAttribute('data-pg'));
+    closeModal();
+    if(!target) return;
+    // 粘贴场景：直接落地；拖拽场景：把待处理内容交给后续流程
+    if(addCtx.pending && addCtx.pending.length){ var fs = addCtx.pending; addCtx.pending=null; doAdd(fs, target); }
+    else openPickDialog(target);
+  });
+  return null;
+}
+
+/* --- 主入口：把一批 File 落到指定分组 --- */
+async function doAdd(files, g, opt){
+  opt = opt || {};
+  if(!files || !files.length) return;
+  // 第二个参数应是分组对象；容错接受 id，非法入参直接返回而不是静默失败
+  if(g && typeof g === 'string') g = findGroup(g);
+  if(!g || !g.id){ toast('导入目标分组无效，已取消','err'); return; }
+  if(!g.styleId){ toast('素材分组缺少归属信息，无法导入','err'); return; }
+  var cat = catOfStyle(g.styleId), prod = prodOfStyle(g.styleId), style = findStyle(g.styleId);
+  if(!cat || !prod || !style){ toast('素材分组的所属产品分类已不存在，请刷新后重试','err'); return; }
+  if(!cat||!prod||!style){ toast('素材归属已失效，请重新选择产品分类','err'); return; }
+  g.assets = g.assets||[];
+  var parts = pathOf(cat,prod,style,g);
+  var okN=0, failN=0;
+  var seenNames = {};   // 本批次内的文件名去重
+  var running = false;   // 由外部决定是否显示遮罩（拖拽通道自己控制）
+  if(!opt.noBusy) busy(true,'正在保存 '+files.length+' 个素材…',0);
+  try{
+    for(var i=0;i<files.length;i++){
+      var f = files[i];
+      if(!f || !f.name) continue;
+      // 进度始终更新，遮罩由调用方是否传 noBusy 决定
+      if(i%3===0 || i===files.length-1){
+        busy(true, '正在保存 '+(i+1)+' / '+files.length, (i+1)/files.length*100);
+      }
+      // 相对路径信息：来自文件夹拖入时保留子目录名，便于回溯来源
+      var relPath = f.webkitRelativePath || '';
+      if(!relPath && f.relPath) relPath = f.relPath;
+      var kind = kindOf(f.name), ext = extOf(f.name);
+      var used = baseOf(f.name);
+      var fullKey = (used+'.'+ext).toLowerCase();
+      // 同名来自不同子目录时，用来源目录做前缀区分，避免撞名覆盖
+      if(seenNames[fullKey]){
+        var src = relPath.replace(/\/[^/]*$/,'').split('/');
+        src = src.length>1 ? src.slice(1).join('-') : src[0];
+        if(src) used = src + '-' + used;
+      }
+      seenNames[(used+'.'+ext).toLowerCase()] = 1;
+      var fileName, size=f.size, w=0, h=0;
+
+      if(S.mode==='fs'){
+        // 本地文件夹模式：真实写盘，同名自动加后缀，绝不覆盖其他分组的文件
+        try{
+          var uniq = await fsUniqName(parts, used, ext);
+          fileName = uniq;
+          if(kind==='image'){
+            var sm = await shrink(f);          // 只压缩一次
+            await fsWrite(parts, fileName, sm.blob);
+            w=sm.w; h=sm.h; size=sm.blob.size;
+          }else{
+            await fsWrite(parts, fileName, f);
+          }
+        }catch(err){ failN++; continue; }
+      }else{
+        // 兜底模式：存入 IndexedDB
+        fileName = used + (ext?('.'+ext):'');
+        try{
+          var blob = f, sw = 0, sh = 0;
+          if(kind==='image'){ var sm2 = await shrink(f); blob = sm2.blob; sw=sm2.w; sh=sm2.h; }
+          var aid = uid('a');
+          await idbPut(aid, blob);
+          var a0 = {
+            id: aid, name: used, type: kind, ext: ext, size: blob.size, w: sw, h: sh,
+            ts: Date.now(), order: g.assets.length, tags: [], missing:false,
+            fileName: fileName, c: cat.id, p: prod.id, s: style.id, g: g.id,
+            rel: relPath, _u:null
+          };
+          g.assets.push(a0);
+          markDirty(a0);
+          okN++;
+          continue;
+        }catch(err){ failN++; continue; }
+      }
+
+      var aN = {
+        id: uid('a'), name: used, type: kind, ext: ext, size: size, w: w, h: h,
+        ts: Date.now(), order: g.assets.length, tags: [], missing:false,
+        fileName: fileName, c: cat.id, p: prod.id, s: style.id, g: g.id,
+        rel: relPath, _u:null
+      };
+      g.assets.push(aN);
+      markDirty(aN);
+      okN++;
+    }
+  }finally{ if(!opt.noBusy) busy(false); }
+  // 导入完成后立即落盘（不等去抖），保证导入完马上切走也不丢数据
+  if(okN){ saveTree(); flushMeta(); }
+  if(opt.noBusy){ refreshAll(); return {ok:okN, fail:failN}; }
+  addCtx.files = null;
+  refreshAll();
+  if(okN) toast('已保存 '+okN+' 个素材到「'+g.name+'」','ok');
+  if(failN) toast(failN+' 个素材保存失败，请检查磁盘空间或文件占用','err');
+  return {ok:okN, fail:failN};
+}
+
+/* --- 通道 1：粘贴 --- */
+document.addEventListener('paste', function(e){
+  var items = (e.clipboardData && e.clipboardData.items) || [];
+  var files = [];
+  for(var i=0;i<items.length;i++){
+    if(items[i].kind==='file'){ var f=items[i].getAsFile(); if(f) files.push(f); }
+  }
+  if(!files.length) return;
+  e.preventDefault();
+  addCtx.pending = files;          // 暂存，等分组确定后再落地
+  var g = needCtx(addCtx.groupId);
+  if(g){ addCtx.pending = null; doAdd(files, g); }
+});
+
+/* --- 主入口：把一批 File 落到指定分组 --- */
+// gid 传入时直接定位到该分组；不传则弹三选项入口
+function openFilePicker(gid){
+  var g = gid ? findGroup(gid) : null;
+  if(g) return pickFilesInto(g);
+  var c = cur();
+  if(!c.style){ toast('请先在左侧选择产品分类','err'); return; }
+  var gs = sortBy(c.style.groups,'order');
+  if(!gs.length){ toast('请先建立素材分组','err'); return; }
+  if(gs.length===1) return openPickDialog(gs[0]);
+  // 多分组：先选分组，再选添加方式
+  var m = openModal({ title:'选择导入位置',
+    body:'<div style="margin-top:8px;font-size:12px;color:var(--ink3)">'
+      +'当前产品分类：<b style="color:var(--ink)">'+esc(c.style.name)+'</b> · 素材必须明确归属。</div>'
+      +'<div class="list">'+gs.map(function(g){
+          return '<div class="li" data-pg="'+g.id+'"><span class="ck">'+ic('check',11)+'</span>'
+            +'<div><div>'+esc(g.name)+'</div><div class="pth">'+((g.assets||[]).length)+' 个素材</div></div></div>';
+        }).join('')+'</div>',
+    cancel:false, okText:'取消', onOk:function(){ closeModal(); } });
+  m.addEventListener('click', function(e){
+    var li = e.target.closest('[data-pg]'); if(!li) return;
+    var target = findGroup(li.getAttribute('data-pg'));
+    closeModal(); if(target) openPickDialog(target);
+  });
+}
+function openPickDialog(g){
+  var canDir = typeof HTMLInputElement !== 'undefined' &&
+    'webkitdirectory' in document.createElement('input');
+  var html = '<div style="margin-top:8px;font-size:13px;line-height:1.75">'
+    + '选择要导入到「<b style="color:var(--ink)">'+esc(g.name)+'</b>」的内容。</div>'
+    + '<div class="acts" style="margin-top:15px;flex-direction:column;gap:9px">'
+    + '<button class="mbtn pri" id="pkDir" style="width:100%;height:46px;justify-content:center">'
+    + ic('folder',15)+'选择整个文件夹（推荐，可自动展开子目录）</button>'
+    + '<button class="mbtn" id="pkDirMulti" style="width:100%;height:46px;justify-content:center">'
+    + ic('layers',15)+'同时选择多个文件夹</button>'
+    + '<button class="mbtn" id="pkFile" style="width:100%;height:46px;justify-content:center">'
+    + ic('imgs',15)+'选择单个文件（图片 / 视频 / 文档）</button>'
+    + '</div>'
+    + '<div style="margin-top:14px;padding:11px 13px;background:#fbfaf8;border-radius:9px;'
+    + 'font-size:12px;color:var(--ink2);line-height:1.8">'
+    + '<b>其他方式：</b>把文件夹直接拖到下方任意分组卡片上即可导入；'
+    + '或用 <span class="kbd">Ctrl+V</span> 粘贴剪贴板里的图片。'
+    + (canDir? '' : '<br><span style="color:var(--danger)">当前浏览器不支持选择文件夹，请改用 Chrome 或 Edge。</span>')
+    + '</div>';
+  var m = openModal({ title:'添加素材', wide:false, body: html, okText:'关闭', cancel:false,
+    onOk:function(){ closeModal(); } });
+
+  m.querySelector('#pkFile').addEventListener('click', function(){
+    closeModal(); pickFilesInto(g);
+  });
+  m.querySelector('#pkDir').addEventListener('click', function(){
+    closeModal(); pickDirsInto(g, false);
+  });
+  m.querySelector('#pkDirMulti').addEventListener('click', function(){
+    closeModal(); pickDirsInto(g, true);
+  });
+}
+function pickFilesInto(g){
+  var inp = document.createElement('input');
+  inp.type='file'; inp.multiple=true;
+  inp.accept='image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.txt,.ai,.psd,.cdr';
+  inp.style.cssText='position:fixed;left:-9999px';
+  document.body.appendChild(inp);
+  inp.addEventListener('change', function(){
+    var files = Array.prototype.slice.call(inp.files||[]).filter(function(f){ return !IGNORE_FILES.test(f.name); });
+    document.body.removeChild(inp);
+    if(files.length) doAdd(files, g);
+  });
+  inp.click();
+}
+function pickDirsInto(g, multi){
+  var inp = document.createElement('input');
+  inp.type='file';
+  inp.setAttribute('webkitdirectory','');
+  if(multi) inp.multiple = true;
+  inp.style.cssText='position:fixed;left:-9999px';
+  document.body.appendChild(inp);
+  inp.addEventListener('change', function(){
+    var all = Array.prototype.slice.call(inp.files||[]);
+    document.body.removeChild(inp);
+    if(!all.length) return;
+
+    // 过滤系统/隐藏文件
+    var files = [], sysSkipped = 0;
+    for(var i=0;i<all.length;i++){
+      if(IGNORE_FILES.test(all[i].name)){ sysSkipped++; continue; }
+      files.push(all[i]);
+    }
+    if(!files.length){
+      toast(sysSkipped ? ('该文件夹里的 '+sysSkipped+' 个文件都是系统文件，没有可导入的内容') : '没有选择到任何文件','err');
+      return;
+    }
+    // 超过上限时明确告知会截断多少，避免用户以为全导入了
+    var capped = 0;
+    if(files.length > MAX_FILES){ capped = files.length - MAX_FILES; files = files.slice(0, MAX_FILES); }
+
+    var dirs = [];
+    files.forEach(function(f){ if(f.webkitRelativePath){
+      var top = f.webkitRelativePath.split('/')[0];
+      if(dirs.indexOf(top)<0) dirs.push(top);
+    }});
+    busy(true, '正在导入 0 / '+files.length, 0);
+    Promise.resolve()
+      .then(function(){ return doAdd(files, g, {noBusy:true}); })
+      .then(function(out){
+        busy(false);
+        var msg = '已从 '+dirs.length+' 个文件夹导入 '+out.ok+' 个素材到「'+g.name+'」';
+        toast(msg,'ok');
+        var warn = [];
+        if(capped) warn.push(capped+' 个文件超过 '+MAX_FILES+' 上限未导入，请分批处理');
+        if(sysSkipped) warn.push('已跳过 '+sysSkipped+' 个系统文件');
+        if(warn.length) toast(warn.join('；'),'err');
+      })
+      .catch(function(e){ busy(false); toast('导入失败：'+e.message,'err'); });
+  });
+  inp.click();
+}
+
+/* =====================================================================
+   通道 3：拖拽（支持整个文件夹）
+   dataTransfer.files 拿不到目录内容，必须用：
+     1) getAsFileSystemHandle()  —— Chrome/Edge，递归拿 FileSystemFileHandle
+     2) webkitGetAsEntry()      —— 兼容兜底，递归 FileSystemEntry
+   两条路都拿不到时（目录层级过深/权限不足）明确提示，不静默失败
+   ===================================================================== */
+var IGNORE_FILES = /^(\.|Thumbs\.db|desktop\.ini$|\$RECYCLE\.BIN$|System Volume Information$)/i;
+var MAX_FILES = 5000;         // 单次拖入上限（浏览器内存有限，超出需分批）
+var MAX_DEPTH = 8;            // 目录递归最大深度
+
+/* 把拖入项解析成 File 数组（递归展开文件夹） */
+/* 把拖入项解析成 File 数组（递归展开文件夹）
+   三条路径，按优先级：
+     1) getAsFileSystemHandle()   —— Edge / 新版 Chrome，标准 API
+     2) webkitGetAsEntry()        —— 旧版 Chrome / Chrome 兼容模式
+     3) dataTransfer.files         —— 只对普通文件有效，文件夹拿不到
+   绝不能只判断 dt.items[0].webkitGetAsEntry 是否存在：
+   Edge 上该属性不存在但 getAsFileSystemHandle 可用，判错会导致文件夹完全无法导入。 */
+async function parseDrop(dt, onProgress){
+  var out = [], dirs = [], skipped = {sys:0, deep:0, cap:0, perm:0};
+  var tick = function(n){ if(onProgress) onProgress(n); };
+  var items = dt.items ? Array.prototype.slice.call(dt.items) : [];
+  var fileItems = items.filter(function(i){ return i && i.kind === 'file'; });
+
+  // 路径 1：getAsFileSystemHandle（Edge 走这条）
+  var canHandle = fileItems.length && typeof fileItems[0].getAsFileSystemHandle === 'function';
+  if(canHandle){
+    for(var i=0;i<fileItems.length;i++){
+      try{
+        var h = await fileItems[i].getAsFileSystemHandle();
+        if(!h) continue;
+        await walkHandle(h, out, dirs, skipped, 0, '', tick);
+      }catch(err){
+        // 权限被拒或句柄不可读 → 标记后回退到 entry 路径
+        skipped.perm++;
+      }
+    }
+    if(out.length || dirs.length) return finish(out, dirs, skipped, dt);
+  }
+
+  // 路径 2：webkitGetAsEntry（旧版 Chrome 走这条）
+  var canEntry = fileItems.length && typeof fileItems[0].webkitGetAsEntry === 'function';
+  if(canEntry){
+    var entries = [];
+    for(var j=0;j<fileItems.length;j++){
+      var en = fileItems[j].webkitGetAsEntry();
+      if(en) entries.push(en);
+    }
+    for(var k=0;k<entries.length;k++) await walkEntry(entries[k], out, dirs, skipped, 0, '', tick);
+    if(out.length || dirs.length) return finish(out, dirs, skipped, dt);
+  }
+
+  // 路径 3：普通文件（文件夹在这里拿不到，会被上层明确提示）
+  if(dt.files && dt.files.length){
+    for(var m=0;m<dt.files.length;m++){
+      if(out.length >= MAX_FILES){ skipped.cap++; break; }
+      var f = dt.files[m];
+      if(IGNORE_FILES.test(f.name)){ skipped.sys++; continue; }
+      out.push(f);
+    }
+  }
+  return finish(out, dirs, skipped, dt);
+}
+function finish(out, dirs, skipped, dt){
+  return { files: out, dirs: dirs, skipped: skipped, total: out.length + dirs.length };
+}
+
+/* FileSystemHandle 递归（Edge / 新版 Chrome 标准路径） */
+async function walkHandle(h, out, dirs, skipped, depth, prefix, tick){
+  if(!h) return;
+  if(h.kind === 'file'){
+    if(out.length >= MAX_FILES){ skipped.cap++; return; }
+    if(IGNORE_FILES.test(h.name)){ skipped.sys++; return; }
+    try{
+      var f = await h.getFile();
+      if(!f) return;
+      try{ Object.defineProperty(f,'relPath',{value: prefix+h.name, enumerable:false}); }
+      catch(e){ f.relPath = prefix+h.name; }
+      out.push(f);
+    }catch(err){ skipped.perm++; }
+    return;
+  }
+  if(h.kind === 'directory'){
+    if(IGNORE_FILES.test(h.name)){ skipped.sys++; return; }
+    if(depth >= MAX_DEPTH){ skipped.deep++; return; }
+    dirs.push(h.name);
+    tick(dirs.length+' 个文件夹…');
+    var nextPre = prefix ? prefix+h.name+'/' : h.name+'/';
+    // FileSystemDirectoryHandle.values() 返回异步迭代器，每步都要 await
+    var it = h.values ? h.values() : null;
+    if(!it || typeof it.next !== 'function') return;
+    while(true){
+      var step;
+      try{ step = await it.next(); }
+      catch(err){ skipped.perm++; break; }
+      if(!step || step.done) break;
+      await walkHandle(step.value, out, dirs, skipped, depth+1, nextPre, tick);
+    }
+  }
+}
+/* FileSystemEntry 递归（兼容路径） */
+function readFileEntry(entry){
+  return new Promise(function(res){
+    entry.file(function(f){ res(f); }, function(){ res(null); });
+  });
+}
+function readDirEntries(dir){
+  return new Promise(function(res){
+    var reader = dir.createReader();
+    var all = [];
+    (function readBatch(){
+      reader.readEntries(function(list){
+        if(!list || !list.length){ res(all); return; }
+        all = all.concat(Array.prototype.slice.call(list));
+        if(all.length > MAX_FILES*3){ res(all); return; }   // 防止超大目录卡死
+        readBatch();
+      }, function(){ res(all); });
+    })();
+  });
+}
+async function walkEntry(entry, out, dirs, skipped, depth, prefix, tick){
+  prefix = prefix || '';
+  if(!entry) return;
+  if(entry.isFile){
+    if(out.length >= MAX_FILES){ skipped.cap++; return; }
+    if(IGNORE_FILES.test(entry.name)){ skipped.sys++; return; }
+    var f = await readFileEntry(entry);
+    if(f){
+      // File 对象只读，手动补上相对路径，用于回溯素材来自哪个子文件夹
+      try{ Object.defineProperty(f,'relPath',{value: prefix+entry.name, enumerable:false}); }
+      catch(e){ f.relPath = prefix+entry.name; }
+      out.push(f);
+    }
+    return;
+  }
+  if(entry.isDirectory){
+    if(IGNORE_FILES.test(entry.name)){ skipped.sys++; return; }
+    if(depth >= MAX_DEPTH){ skipped.deep++; return; }
+    dirs.push(entry.name);
+    tick(dirs.length +' 个文件夹…');
+    var nextPre = prefix ? prefix+entry.name+'/' : entry.name+'/';
+    var kids = await readDirEntries(entry);
+    for(var i=0;i<kids.length;i++){
+      await walkEntry(kids[i], out, dirs, skipped, depth+1, nextPre, tick);
+    }
+  }
+}
+
+/* 统一 drop 处理：拿到解析结果后交给 doAdd */
+async function handleDrop(e, zone){
+  e.preventDefault(); e.stopPropagation();
+  if(zone) zone.classList.remove('drag');
+  var dt = e.dataTransfer; if(!dt) return;
+
+  // 判断是否拖了文件夹（仅用于选择提示文案，两条路径都要尝试）
+  var looksLikeDir = false;
+  try{
+    var its = dt.items ? Array.prototype.slice.call(dt.items) : [];
+    looksLikeDir = its.some(function(i){
+      if(!i || i.kind!=='file') return false;
+      try{
+        if(i.webkitGetAsEntry){ var en = i.webkitGetAsEntry(); return !!(en && en.isDirectory); }
+      }catch(e){}
+      return false;
+    });
+  }catch(e){}
+
+  var token = ++dropToken;
+  var busyTxt = looksLikeDir ? '正在展开文件夹…' : '正在读取素材…';
+  busy(true, busyTxt);
+
+  var res;
+  try{ res = await parseDrop(dt, function(n){
+    busy(true, '正在展开文件夹：已找到 '+n);
+  }); }
+  catch(err){ busy(false); toast('读取失败：无法访问拖入的内容','err'); return; }
+
+  if(token !== dropToken){ busy(false); return; }
+
+  if(!res.files.length){
+    busy(false);
+    var why = '';
+    if(res.skipped.cap) why = '内容超过 '+MAX_FILES+' 个上限，请分批拖入';
+    else if(res.skipped.deep) why = '目录层级超过 '+MAX_DEPTH+' 层，请拖入更浅的文件夹';
+    else if(res.skipped.perm) why = '浏览器拒绝了文件读取权限，请在地址栏左侧重新允许访问';
+    else if(!res.total){
+      // 关键分支：拖的是文件夹但一条 API 都没走通
+      why = canHandleFolder()
+        ? '浏览器没能读取这个文件夹。请改用「添加素材 → 选择整个文件夹」，或直接把文件夹里的文件拖进来'
+        : '当前浏览器不支持文件夹拖入。建议改用 Chrome / Edge，并在「添加素材」里选「选择整个文件夹」';
+    }
+    else why = '拖入的内容里没有可导入的文件';
+    toast(why,'err');
+    return;
+  }
+
+  addCtx.pending = res.files;   // 若需弹分组选择，选中后继续保存
+  var g = needCtx(zone && zone.getAttribute('data-drop'));
+  if(!g){ busy(false); return; }
+  addCtx.pending = null;
+
+  busy(true, '正在保存 0 / '+res.files.length, 0);
+  try{
+    var out = await doAdd(res.files, g, { noBusy:true });
+    busy(true, '已保存 '+out.ok+' / '+res.files.length, 100);
+  }finally{
+    if(token === dropToken) setTimeout(function(){ busy(false); }, 220);
+  }
+
+  // 汇总提示
+  var msg = '已保存 '+res.files.length+' 个素材到「'+g.name+'」';
+  if(res.dirs.length) msg += '，展开 '+res.dirs.length+' 个文件夹';
+  toast(msg,'ok');
+  var extra = [];
+  if(res.skipped.cap) extra.push(MAX_FILES+' 个上限已满，部分未导入');
+  if(res.skipped.deep) extra.push('有目录超过 '+MAX_DEPTH+' 层未展开');
+  if(res.skipped.sys) extra.push('已跳过 '+res.skipped.sys+' 个系统/隐藏文件');
+  if(extra.length) toast(extra.join('；'),'err');
+}
+var dropToken = 0;
+
+function bindDrop(scope){
+  var root = scope||$('#body');
+  // 1) 分组卡整体作为拖放热区（覆盖卡片内所有位置，包括网格中缝）
+  Array.prototype.forEach.call(root.querySelectorAll('.gcard'), function(card){
+    if(card.__cardDrop) return;
+    card.__cardDrop = true;
+    var gdrop = card.querySelector('.gdrop');
+    if(!gdrop) return;
+    card.addEventListener('dragover', function(e){
+      e.preventDefault(); e.stopPropagation();
+      if(e.dataTransfer) e.dataTransfer.dropEffect='copy';
+      card.classList.add('dragin');
+      zoneOn(gdrop, card);
+    });
+    card.addEventListener('dragleave', function(e){
+      if(e.relatedTarget && card.contains(e.relatedTarget)) return;
+      card.classList.remove('dragin'); zoneOff(gdrop, card);
+    });
+    card.addEventListener('drop', function(e){
+      card.classList.remove('dragin'); zoneOff(gdrop, card);
+      handleDrop(e, gdrop);
+    });
+  });
+
+  // 2) 空分组 / 添加按钮：独立热区
+  Array.prototype.forEach.call(root.querySelectorAll('[data-drop]'), function(z){
+    if(z.__dropBound) return;
+    z.__dropBound = true;
+    z.addEventListener('dragover', function(e){
+      e.preventDefault(); e.stopPropagation();
+      if(e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+      zoneOn(z, z);
+    });
+    z.addEventListener('dragleave', function(e){
+      if(e.relatedTarget && z.contains(e.relatedTarget)) return;
+      zoneOff(z, z);
+    });
+    z.addEventListener('drop', function(e){ zoneOff(z,z); handleDrop(e, z); });
+  });
+
+  // 3) 整页兜底：拖到任何空白位置也能接住
+  var dz = $('#body');
+  if(dz && !dz.__pageDrop){
+    dz.__pageDrop = true;
+    dz.addEventListener('dragover', function(e){ e.preventDefault(); pageHint(true); });
+    dz.addEventListener('dragleave', function(e){
+      if(e.relatedTarget && dz.contains(e.relatedTarget)) return;
+      pageHint(false);
+    });
+    dz.addEventListener('drop', function(e){
+      pageHint(false);
+      if(e.target.closest && e.target.closest('.gcard')) return;  // 交给分组卡处理
+      handleDrop(e, null);
+    });
+  }
+  Array.prototype.forEach.call(root.querySelectorAll('.gcard'), function(c){ c.classList.remove('dragin'); });
+  Array.prototype.forEach.call(root.querySelectorAll('.addcell'), function(a){ a.classList.remove('drag'); });
+}
+function zoneOn(z, card){
+  if(card && card.classList.contains('gcard')){ card.classList.add('dragin'); return; }
+  z.classList.add('drag');
+}
+function zoneOff(z, card){
+  if(card && card.classList.contains('gcard')){ card.classList.remove('dragin'); return; }
+  z.classList.remove('drag');
+  z.__hint && z.__hint.remove(); z.__hint=null;
+}
+function pageHint(on){ document.body.classList.toggle('dragging', !!on); }
+
+/* =====================================================================
+   统一刷新入口 —— 所有交互改完数据后只调它
+   ===================================================================== */
+function refreshAll(){
+  renderStatus();
+  renderTree();
+  renderCrumb();
+  renderToolbar();
+  renderBody();
+  bindDrop($('#body'));
+}
+
+/* =====================================================================
+   交互绑定
+   ===================================================================== */
+$('#tree').addEventListener('contextmenu', function(e){
+  var row = e.target.closest('.trow'); if(!row) return;
+  e.preventDefault();
+  nodeMenu(row.getAttribute('data-k'), row.getAttribute('data-id'));
+});
+$('#tree').addEventListener('click', function(e){
+  var mini = e.target.closest('[data-act]');
+  if(mini){
+    e.stopPropagation();
+    var id = mini.getAttribute('data-id');
+    if(mini.getAttribute('data-act')==='addprod') return dialogProd(id);
+    if(mini.getAttribute('data-act')==='addstyle') return dialogStyle(id);
+  }
+  var row = e.target.closest('.trow'); if(!row) return;
+  var k = row.getAttribute('data-k'), id = row.getAttribute('data-id');
+  if(k==='cat'){ S.ui.cur = {catId:id, prodId:null, styleId:null, groupId:null}; }
+  else if(k==='prod'){ var p=findProd(id);
+    S.ui.cur = {catId:p?p.catId:null, prodId:id, styleId:(p&&p.styles&&p.styles.length?sortBy(p.styles,'order')[0].id:null), groupId:null}; }
+  else if(k==='style'){ var s=findStyle(id), p2=prodOfStyle(id);
+    S.ui.cur = {catId:p2?p2.catId:null, prodId:p2?p2.id:null, styleId:id, groupId:null}; }
+  save(); closeSide(); refreshAll();
+});
+
+/* 顶部操作栏事件
+   注意：#toolbar 与 #body 是兄弟节点，事件不会在两者之间冒泡，
+   所以工具栏里的操作按钮必须在这里独立处理，不能只靠 #body 的委托。 */
+$('#toolbar').addEventListener('click', function(e){
+  // 1) 全选本产品分类 / 取消选择
+  var sa = e.target.closest('[data-gselall]');
+  if(sa){ toggleSelectAll(sa.getAttribute('data-gselall')); return; }
+  // 2) 删除所选
+  var ds = e.target.closest('[data-gdelsel]');
+  if(ds){ dialogDelSelIn(ds.getAttribute('data-gdelsel')); return; }
+  // 3) 常规操作
+  var b = e.target.closest('[data-a]'); if(!b) return;
+  var a = b.getAttribute('data-a');
+  if(a==='addgroup') return dialogGroup();
+  if(a==='preset') return presetGroups();
+  if(a==='sortstyle') return dialogSortStyle();
+  if(a==='pick') return openFilePicker(null);
+});
+
+/* 全选/取消选择当前产品分类的全部素材（工具栏与内容区共用）
+   三段式：部分选中 → 全选；已全选 → 取消。避免「只勾了一个就点全选，结果全被清掉」的反直觉行为。 */
+function toggleSelectAll(sid){
+  var st = findStyle(sid);
+  var pool = [];
+  (st ? (st.groups||[]) : []).forEach(function(g){
+    (g.assets||[]).forEach(function(a){ pool.push(a); });
+  });
+  if(!pool.length){ toast('当前产品分类还没有素材','err'); return; }
+  var selN = pool.filter(function(a){ return S.ui.sel[a.id]; }).length;
+  var allSel = selN === pool.length;
+  pool.forEach(function(a){ S.ui.sel[a.id] = allSel ? 0 : 1; });
+  save();
+  renderToolbar(); renderBody(); bindDrop($('#body'));
+  toast(allSel ? ('已取消选择 '+pool.length+' 个素材') : ('已全选 '+pool.length+' 个素材'),'ok');
+}
+
+$('#body').addEventListener('click', function(e){
+  // 顺序关键：先拦截分组头内的操作按钮，再处理折叠，最后是素材勾选
+  var ga = e.target.closest('[data-gact]');
+  if(ga){ e.stopPropagation();
+    var gact=ga.getAttribute('data-gact'), gid2=ga.getAttribute('data-id');
+    if(gact==='up'||gact==='down') return moveGroup(gid2, gact);
+    if(gact==='rename') return dialogGroup(gid2);
+    if(gact==='del') return dialogDelGroup(gid2);
+    return; }
+
+  var pk = e.target.closest('[data-pick]');
+  if(pk){ e.stopPropagation();
+    var id=pk.getAttribute('data-pick');
+    S.ui.sel[id] = S.ui.sel[id]?0:1; save();
+    // 选中态显示在顶栏，两处都要刷新
+    renderToolbar(); renderBody(); bindDrop($('#body')); return; }
+
+  var act = e.target.closest('[data-a]');
+  if(act){ e.stopPropagation();
+    var aa=act.getAttribute('data-a'), id=act.getAttribute('data-id');
+    if(aa==='newcat') return dialogCat();
+    if(aa==='addprod') return dialogProd(id);
+    if(aa==='addstyle') return dialogStyle(id);
+    if(aa==='preset') return presetGroups();
+    if(aa==='addgroup') return dialogGroup();
+    if(aa==='pick') return openFilePicker(id || null);
+    if(aa==='sortstyle') return dialogSortStyle();
+    if(aa==='root') return pickRoot();
+  }
+
+  var tog = e.target.closest('[data-tog]');
+  if(tog){ var gid=tog.getAttribute('data-tog');
+    S.ui.collapsed[gid] = !S.ui.collapsed[gid]; save(); renderBody(); bindDrop($('#body'));
+    window.scrollTo({top:window.scrollY,behavior:'instant'}); return; }
+
+  var op = e.target.closest('[data-open]');
+  if(op){ return openAsset(op.getAttribute('data-open')); }
+
+  var sa = e.target.closest('[data-gselall]');
+  if(sa){ toggleSelectAll(sa.getAttribute('data-gselall')); return; }
+
+  // 加载更多：扩大该分组的显示上限
+  var mb = e.target.closest('[data-more]');
+  if(mb){ var mid=mb.getAttribute('data-more');
+    S.ui.more = S.ui.more||{};
+    S.ui.more[mid] = (S.ui.more[mid]||300) + 600;
+    renderBody(); bindDrop($('#body')); return; }
+
+  var ds = e.target.closest('[data-gdelsel]');
+  if(ds){ return dialogDelSelIn(ds.getAttribute('data-gdelsel')); }
+
+  var dc = e.target.closest('[data-drop]');
+  if(dc) return openFilePicker(dc.getAttribute('data-drop'));
+});
+
+$('#bNewCat').addEventListener('click', dialogCat);
+$('#bRoot').addEventListener('click', pickRoot);
+$('#mMenu').addEventListener('click', function(){ $('#side').classList.add('open'); $('#scrim').hidden=false; });
+$('#scrim').addEventListener('click', function(){ $('#side').classList.remove('open'); $('#scrim').hidden=true; });
+$('#bBackup').addEventListener('click', exportBackup);
+$('#bSet').addEventListener('click', dialogSettings);
+function closeSide(){ $('#side').classList.remove('open'); $('#scrim').hidden=true; }
+
+/* =====================================================================
+   各类新建 / 排序 / 删除对话框
+   ===================================================================== */
+var ICON_FOLDER='<span class="ic">'+ic('folder',17)+'</span>';
+var ICON_BOX='<span class="ic">'+ic('box',17)+'</span>';
+var ICON_TAG='<span class="ic">'+ic('tag',17)+'</span>';
+var ICON_LAYER='<span class="ic">'+ic('layers',17)+'</span>';
+
+function fld(label, val, ph){
+  return '<div class="fld"><label>'+esc(label)+'</label><input type="text" value="'+esc(val||'')
+    +'" placeholder="'+esc(ph||'')+'"></div>';
+}
+
+function dialogCat(editId){
+  var c = editId ? findCat(editId) : null;
+  openModal({ title: c?'重命名产品类目':'新建产品类目', icon: ICON_FOLDER,
+    body: fld('目录名称', c?c.name:'', '例如：2026 春季新品'),
+    okText: c?'保存':'创建',
+    onOk:function(m){
+      var v = m.querySelector('input').value.trim(); if(!v){ toast('请填写名称','err'); return; }
+      if(c){ c.name = v; }
+      else{
+        var nc = {id:nid('c'), name:v, order:allCats().length, products:[]};
+        S.tree.cats.push(nc); S.ui.cur = {catId:nc.id, prodId:null, styleId:null, groupId:null};
+      }
+      save(); closeModal(); refreshAll(); toast(c?'已保存':'已创建目录','ok');
+    }
+  });
+}
+function dialogProd(catId, editId){
+  var cat = findCat(catId); if(!cat) return;
+  var p = editId ? findProd(editId) : null;
+  openModal({ title: (p?'重命名工厂':'为「'+cat.name+'」新建工厂'), icon: ICON_BOX,
+    body: fld('工厂名称', p?p.name:'', '例如：xx 工厂 / 自主品牌'),
+    okText: p?'保存':'创建',
+    onOk:function(m){
+      var v=m.querySelector('input').value.trim(); if(!v){ toast('请填写名称','err'); return; }
+      if(p){ p.name=v; }
+      else{
+        var np={id:nid('p'), name:v, order:(cat.products||[]).length, catId:cat.id, styles:[]};
+        cat.products=cat.products||[]; cat.products.push(np);
+        S.ui.cur={catId:cat.id, prodId:np.id, styleId:null, groupId:null};
+      }
+      save(); closeModal(); refreshAll(); toast(p?'已保存':'已创建工厂','ok');
+    }
+  });
+}
+function dialogStyle(prodId, editId){
+  var p = findProd(prodId); if(!p) return;
+  var s = editId ? findStyle(editId) : null;
+  openModal({ title: (s?'重命名产品分类':'为「'+p.name+'」新建产品分类'), icon: ICON_TAG,
+    body: fld('产品分类名称', s?s.name:'', '例如：保温杯 / 运动水壶'),
+    okText: s?'保存':'创建',
+    onOk:function(m){
+      var v=m.querySelector('input').value.trim(); if(!v){ toast('请填写名称','err'); return; }
+      if(s){ s.name=v; }
+      else{
+        var ns={id:nid('s'), name:v, order:(p.styles||[]).length, groups:[]};
+        p.styles=p.styles||[]; p.styles.push(ns);
+        presetInto(ns);
+        S.ui.cur={catId:p.catId, prodId:p.id, styleId:ns.id, groupId:null};
+      }
+      save(); closeModal(); refreshAll(); toast(s?'已保存':'已创建产品分类','ok');
+    }
+  });
+}
+function dialogGroup(gid){
+  var c=cur(); if(!c.style) { toast('请先选择产品分类','err'); return; }
+  var g = gid ? findGroup(gid) : null;
+  openModal({ title: g?'重命名素材分组':'新增素材分组', icon: ICON_LAYER,
+    body: '<div style="margin-top:8px;font-size:12px;color:var(--ink3)">'
+      +'分组用于划分大的素材类别。新建分组只创建空容器，不会复制其他分组的内容。</div>'
+      + fld('分组名称', g?g.name:'', '例如：包装素材 / 展会素材'),
+    okText: g?'保存':'创建',
+    onOk:function(m){
+      var v=m.querySelector('input').value.trim(); if(!v){ toast('请填写名称','err'); return; }
+      if(g){ g.name=v; }
+      else{
+        var gs=c.style.groups||[];
+        c.style.groups=gs;
+        gs.push({id:nid('g'), name:v, order:gs.length, styleId:c.style.id,
+          colorIdx: gs.length%GCOLORS.length, assets:[]});
+      }
+      save(); closeModal(); refreshAll(); toast(g?'已保存':'已创建分组','ok');
+    }
+  });
+}
+function presetInto(style){
+  style.groups = style.groups||[];
+  GROUP_PRESET.forEach(function(nm,i){
+    style.groups.push({id:nid('g'), name:nm, order:i, styleId:style.id,
+      colorIdx:i%GCOLORS.length, assets:[]});
+  });
+}
+function presetGroups(){
+  var c=cur(); if(!c.style) return;
+  if((c.style.groups||[]).length){ toast('该产品分类已有分组','err'); return; }
+  presetInto(c.style); save(); refreshAll(); toast('已建立 3 个预置分组','ok');
+}
+function moveGroup(gid, dir){
+  var c=cur(); if(!c.style) return;
+  var gs = sortBy(c.style.groups,'order');
+  var i = gs.map(function(g){return g.id;}).indexOf(gid);
+  if(i<0) return;
+  var j = dir==='up' ? i-1 : i+1;
+  if(j<0||j>=gs.length) return;
+  var t = gs[i].order; gs[i].order=gs[j].order; gs[j].order=t;
+  c.style.groups=gs; save(); renderBody(); bindDrop($('#body'));
+  toast('分组顺序已调整');
+}
+
+/* --- 产品分类排序：只改顺序，不改归属 --- */
+var sortReopen = false;
+function dialogSortStyle(){
+  var c=cur(); if(!c.style) return;
+  var p = prodOfStyle(c.style.id);
+  var gs = sortBy(p.styles,'order');
+  var body = '<div style="margin-top:8px;font-size:12px;color:var(--ink3)">'
+    + '拖动条目调整顺序。排序只改变显示顺序，素材所属的工厂与产品分类不会改变，本地文件夹路径也不会移动。</div>'
+    + '<div class="list" id="sortList">'+gs.map(function(s,i){
+      return '<div class="li" data-si="'+s.id+'" data-di="'+i+'"><span style="width:20px;color:var(--ink3);font-size:12px">'+(i+1)+'</span>'
+        +'<div style="flex:1"><div>'+esc(s.name)+'</div><div class="pth">'
+        + countAssetsOfStyle(s)+' 个素材 · '+((s.groups||[]).length)+' 个分组</div></div>'
+        + '<span style="color:var(--ink3);display:flex">'+ic('sort',14)+'</span></div>';
+    }).join('')+'</div>'
+    + '<div style="margin-top:10px;font-size:12px;color:var(--ink3)">也可直接点上下箭头逐个调整。</div>'
+    + '<div class="list" style="border:none;max-height:none;display:flex;flex-wrap:wrap;gap:7px">'
+    + gs.map(function(s,i){
+      return '<button class="mbtn" data-smove="'+s.id+'" data-dir="-1" style="height:34px;border:1px solid var(--bd2);background:#fff;font-size:12px">'
+        + ic('up',12)+esc(s.name)+'</button>';
+    }).join('')+'</div>';
+  openModal({ wide:true, title:'调整产品分类顺序', icon: ICON_TAG, body: body,
+    cancel:false, okText:'完成',
+    onOk:function(){ closeModal(); }
+  });
+  bindDragList(gs);
+  var m=$('#modal');
+  m.addEventListener('click', function(e){
+    var b=e.target.closest('[data-smove]'); if(!b) return;
+    var sid=b.getAttribute('data-smove'), dir=+b.getAttribute('data-dir');
+    var order=gs.map(function(x){return x.id;});
+    var ia=order.indexOf(sid), ib=ia+dir;
+    if(ib<0||ib>=order.length) return;
+    order.splice(ib,0,order.splice(ia,1)[0]);
+    gs.forEach(function(s,i){ s.order=i; });
+    save(); refreshAll();           // 先落库再重开，避免叠加
+    setTimeout(dialogSortStyle, 0);  // 异步重开，不在当前调用栈内
+  });
+}
+function bindDragList(list){
+  var dragId=null;
+  var m=$('#modal');
+  Array.prototype.forEach.call(m.querySelectorAll('[data-si]'), function(li){
+    li.setAttribute('draggable','true');
+    li.addEventListener('dragstart', function(e){ dragId=li.getAttribute('data-si'); li.style.opacity='.45'; });
+    li.addEventListener('dragend', function(){ li.style.opacity=''; });
+    li.addEventListener('dragover', function(e){ e.preventDefault(); li.style.background='#f1f0ec'; });
+    li.addEventListener('dragleave', function(){ li.style.background=''; });
+    li.addEventListener('drop', function(e){
+      e.preventDefault(); e.stopPropagation(); li.style.background='';
+      var tid=li.getAttribute('data-si'); if(!dragId||tid===dragId) return;
+      var a=list.map(function(x){return x.id;}), ia=a.indexOf(dragId), ib=a.indexOf(tid);
+      var moved=a.splice(ia,1)[0]; a.splice(ib,0,moved);
+      list.forEach(function(s,i){ s.order=i; });
+      save(); refreshAll();
+      toast('产品分类顺序已保存');
+      setTimeout(dialogSortStyle, 0);
+    });
+  });
+}
+
+/* =====================================================================
+   删除安全边界：关闭素材框 / 收起分组 / 删除素材 是三个不同操作
+   ===================================================================== */
+function dialogDelGroup(gid){
+  var g = findGroup(gid); if(!g) return;
+  var n = (g.assets||[]).length;
+  var body = n
+    ? '即将删除<b>整个素材分组</b>「<b>'+esc(g.name)+'</b>」。<br>'
+      +'该分组下共 <b>'+n+'</b> 个素材，'+(S.mode==='fs'?'本地文件夹中的文件也会一并处理。':'浏览器内记录将被清除。')
+      +'<br>此操作<b>不会影响</b>其他工厂、其他产品分类和其他分组。'
+    : '即将删除<b>空分组</b>「<b>'+esc(g.name)+'</b>」。<br>该分组不含素材，删除不会影响任何文件。';
+  openModal({ title:'删除素材分组',
+    icon:'<span class="ic" style="background:var(--danger-bg);color:var(--danger)">'+ic('trash',17)+'</span>',
+    warn: body, okText:'确认删除分组', cancelText:'取消',
+    onOk:function(){
+      // 连同该分组下所有素材的索引与文件一起清理，避免留下孤儿数据占空间
+      var cat=catOfStyle(g.styleId), prod=prodOfStyle(g.styleId), sty=findStyle(g.styleId);
+      var parts = (cat&&prod&&sty) ? pathOf(cat,prod,sty,g) : null;
+      (g.assets||[]).forEach(function(a){
+        revOid(a.id);
+        metaDel(a.id).catch(function(){});
+        if(S.mode==='local') idbDel(a.id).catch(function(){});
+        if(S.mode==='fs' && parts) fsDel(parts, a.fileName).catch(function(){});
+      });
+      var st=findStyle(g.styleId);
+      if(st) st.groups=(st.groups||[]).filter(function(x){ return x.id!==gid; });
+      save(); saveTree(); closeModal(); refreshAll(); toast('分组已删除');
+    }
+  });
+}
+function dialogDelSelIn(sid){
+  var st=findStyle(sid); if(!st) return;
+  var hits=[];
+  (st.groups||[]).forEach(function(g){
+    (g.assets||[]).forEach(function(a){ if(S.ui.sel[a.id]) hits.push({a:a,g:g}); });
+  });
+  if(!hits.length){ toast('请先勾选要删除的素材','err'); return; }
+  openModal({ title:'删除已选素材',
+    icon:'<span class="ic" style="background:var(--danger-bg);color:var(--danger)">'+ic('trash',17)+'</span>',
+    warn:'即将删除<b>'+hits.length+'</b> 个素材，范围限于产品分类「<b>'+esc(st.name)+'</b>」。<br>'
+      +(S.mode==='fs'?'对应本地文件将一并删除。':'浏览器内记录将被清除。')
+      +'<br>不会影响其他工厂、其他产品分类和其他分组。',
+    okText:'确认删除', cancelText:'取消',
+    onOk:function(){
+      var cat=catOfStyle(sid), prod=prodOfStyle(sid);
+      var fails=[];
+      busy(true,'正在删除…');
+      // 按分组归集，逐组处理，保证互不串扰
+      (st.groups||[]).forEach(function(g){
+        var del=(g.assets||[]).filter(function(a){ return S.ui.sel[a.id]; });
+        if(!del.length) return;
+        var parts = (cat&&prod) ? pathOf(cat,prod,st,g) : null;
+        del.forEach(function(a){
+          revOid(a.id);
+          if(S.mode==='local') idbDel(a.id).catch(function(){});
+          metaDel(a.id).catch(function(){});          // 索引必须一起清，否则变成孤儿记录
+          if(S.mode==='fs' && parts) fsDel(parts, a.fileName).catch(function(){ fails.push(a.name); });
+        });
+        g.assets = (g.assets||[]).filter(function(a){ return !S.ui.sel[a.id]; })
+          .map(function(a,i){ a.order=i; markDirty(a); return a; });
+      });
+      S.ui.sel = {};
+      save();
+      setTimeout(function(){ busy(false); closeModal(); refreshAll();
+        if(fails.length) toast(fails.length+' 个文件删除失败，已保留素材记录，可在文件管理器中手动处理','err');
+        else toast('已删除 '+hits.length+' 个素材','ok');
+      },280);
+    }
+  });
+}
+
+/* --- 节点右键菜单：关闭 / 收起 / 删除 是不同操作 --- */
+function nodeMenu(kind, id){
+  var items=[];
+  if(kind==='cat'){
+    var c=findCat(id);
+    items = [
+      {t:'新建工厂', ic:'plus', fn:function(){ dialogProd(id); }},
+      {t:'重命名目录', ic:'edit', fn:function(){ dialogCat(id); }},
+      {t:'删除目录', ic:'trash', fn:function(){ dialogDelNode('cat',id); }}
+    ];
+  }else if(kind==='prod'){
+    var p=findProd(id);
+    items = [
+      {t:'新建产品分类', ic:'plus', fn:function(){ dialogStyle(id); }},
+      {t:'重命名工厂', ic:'edit', fn:function(){ dialogProd(p?p.catId:null,id); }},
+      {t:'删除工厂', ic:'trash', fn:function(){ dialogDelNode('prod',id); }}
+    ];
+  }else{
+    var s=findStyle(id);
+    items = [
+      {t:'重命名产品分类', ic:'edit', fn:function(){ dialogStyle(prodOfStyle(id)?prodOfStyle(id).id:null,id); }},
+      {t:'删除产品分类', ic:'trash', fn:function(){ dialogDelNode('style',id); }}
+    ];
+  }
+  openModal({ title:'操作', cancel:false, okText:'取消',
+    body:'<div class="list" style="margin-top:6px">'+items.map(function(it,i){
+      return '<div class="li" data-mi="'+i+'">'+ic(it.ic,15)+'<span>'+esc(it.t)+'</span></div>';
+    }).join('')+'</div>',
+    onOk:function(){ closeModal(); }
+  });
+  $('#modal').addEventListener('click', function(ev){
+    var li=ev.target.closest('[data-mi]'); if(!li) return;
+    var it=items[+li.getAttribute('data-mi')];
+    closeModal(); it.fn();
+  });
+}
+function dialogDelNode(kind, id){
+  var label = {cat:L_CAT, prod:L_PROD, style:L_STYLE}[kind];
+  var node = kind==='cat'?findCat(id):(kind==='prod'?findProd(id):findStyle(id));
+  if(!node) return;
+  var sub = 0;
+  if(kind==='cat') sub=(node.products||[]).length;
+  if(kind==='prod') sub=(node.styles||[]).length;
+  if(kind==='style') sub=(node.groups||[]).length;
+  var cnt = kind==='style' ? countAssetsOfStyle(node) : 0;
+  openModal({ title:'删除'+label,
+    icon:'<span class="ic" style="background:var(--danger-bg);color:var(--danger)">'+ic('trash',17)+'</span>',
+    warn:'即将删除<b>'+label+'</b>「<b>'+esc(node.name)+'</b>」。<br>'
+      +(sub? '其下 '+sub+' 个下级'+(kind==='style'?L_GROUP:(kind==='prod'?L_STYLE:L_PROD))+'将一并移除。' : '该项为空。')
+      +(cnt? '<br>涉及的 <b>'+cnt+'</b> 个素材记录将移除。' : '')
+      + '<br>此操作<b>不可撤销</b>，且不影响其他' + label + '。',
+    okText:'确认删除', cancelText:'取消',
+    onOk:function(){
+      // 级联删除：把该节点下所有素材的索引与文件一并清理
+      (function purge(node2){
+        (node2.products||[]).forEach(purge);
+        (node2.styles||[]).forEach(function(st2){
+          (st2.groups||[]).forEach(function(g2){
+            (g2.assets||[]).forEach(function(a){
+              revOid(a.id);
+              metaDel(a.id).catch(function(){});
+              if(S.mode==='local') idbDel(a.id).catch(function(){});
+            });
+          });
+        });
+      })(node);
+      if(kind==='cat') S.tree.cats = S.tree.cats.filter(function(x){ return x.id!==id; });
+      if(kind==='prod'){ var c=findCat(node.catId); if(c) c.products=c.products.filter(function(x){ return x.id!==id; }); }
+      if(kind==='style'){ var p=prodOfStyle(id); if(p) p.styles=p.styles.filter(function(x){ return x.id!==id; }); }
+      S.ui.cur={}; save(); saveTree(); closeModal(); refreshAll(); toast(label+'已删除','ok');
+    }
+  });
+}
+
+/* =====================================================================
+   根文件夹授权（本地落盘）
+   ===================================================================== */
+async function pickRoot(){
+  if(!fsSupported()){
+    toast('当前浏览器不支持写入本地文件夹，已切换到浏览器存储模式。建议使用 Chrome 或 Edge','err');
+    S.mode='local'; save(); refreshAll(); return;
+  }
+  try{
+    var d = await window.showDirectoryPicker({ mode:'readwrite', id:'wb-pkmgr-root' });
+    FS.root = d; FS.rootName = d.name;
+    S.mode = 'fs'; S.rootName = d.name;
+    // 重连后清掉上次「待重连」留下的标记，并重新加载缩略图
+    dropAssetCache();
+    allGroupsOf(S).forEach(function(g){
+      (g.assets||[]).forEach(function(a){ a.missing=false; a.fsOffline=false; });
+    });
+    save(); refreshAll();
+    toast('已连接本地文件夹：'+d.name+'，素材已恢复显示','ok');
+  }catch(e){
+    if(e && e.name==='AbortError'){
+      // 用户主动取消：说明现状，避免他对着横幅不知道下一步做什么
+      toast(S.mode==='fs' ? '已取消选择。未连接状态下素材无法显示，请点击横幅上的「重新连接」' : '已取消选择','err');
+    }else{
+      toast('无法访问该文件夹：'+(e && e.message ? e.message : '未知错误')+'，请重试','err');
+    }
+  }
+}
+
+/* =====================================================================
+   备份 / 设置 / 恢复
+   ===================================================================== */
+function exportBackup(){
+  var data = JSON.stringify({v:1, exportedAt:Date.now(), tree:S.tree, ui:S.ui}, null, 2);
+  var blob = new Blob([data], {type:'application/json'});
+  var url;
+  // file:// 下 objectURL 不可用于下载，必须用 dataURL
+  if(IS_FILE_PROTO){
+    var fr = new FileReader();
+    fr.onload = function(){
+      var a = document.createElement('a');
+      a.href = fr.result;
+      a.download = '素材工作台_索引备份_'+fmtDate(Date.now())+'.json';
+      a.click();
+      toast('索引已导出（本地文件不会打包进备份）','ok');
+    };
+    fr.readAsDataURL(blob);
+    return;
+  }
+  url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = '素材工作台_索引备份_'+fmtDate(Date.now())+'.json';
+  a.click();
+  setTimeout(function(){ URL.revokeObjectURL(url); },1000);
+  toast('索引已导出（本地文件不会打包进备份）','ok');
+}
+function dialogSettings(){
+  var html = '<div style="margin-top:8px;font-size:13px;line-height:1.9">'
+    + '<div>存储方式：<b>'+(
+        S.mode!=='fs' ? '浏览器存储（不落本地文件夹）'
+        : FS.root ? ('本地文件夹 · '+FS.rootName)
+        : ('本地文件夹 · '+ (S.rootName||'原目录') +'（<span style="color:var(--danger)">待重新连接</span>）')
+      )+'</b></div>'
+    + '<div style="color:var(--ink3);font-size:12px">'+ic('warn',12)+' 浏览器存储容量有限，建议改用本地文件夹模式。</div>'
+    + '<div class="fld"><label>导入索引备份</label><input type="file" id="impF" accept="application/json" style="height:auto;padding:8px"></div>'
++ '<div class="fld"><label>自定义缩略图大小</label><input type="number" id="thN" value="'+S.ui.thumb+'" min="100" max="420"></div>'
+  + '</div>'
+  + '<div style="margin-top:14px;padding-top:13px;border-top:1px solid var(--bd)">'
+  + '<div style="font-size:13px;font-weight:500;margin-bottom:7px">本地文件体检</div>'
+  + '<div style="font-size:12px;color:var(--ink3);line-height:1.7;margin-bottom:9px">'
+  + '逐个核对素材是否还能找到对应的本地文件。缺失的会标红提示，不会伪装成正常缩略图。</div>'
+  + '<button class="mbtn" id="bCheck" style="border:1px solid var(--bd2);background:#fff;width:100%;justify-content:center">'
+  + ic('warn',14)+'检测文件缺失</button></div>'
+  + '<div style="margin-top:14px;padding-top:13px;border-top:1px solid var(--bd)">'
+  + '<div style="font-size:13px;font-weight:500;margin-bottom:7px">示例数据</div>'
+  + '<div style="font-size:12px;color:var(--ink3);line-height:1.7;margin-bottom:9px">'
+  + '首次打开时预置了一套示例目录，方便你看清结构。清理后只删除示例，你自己的数据不受影响。</div>'
+  + '<button class="mbtn" id="bClearSample" style="border:1px solid var(--bd2);background:#fff;width:100%;justify-content:center">'
+  + ic('trash',14)+'清空示例数据</button></div>';
+  openModal({ title:'设置与备份', icon: ICON_LAYER, body: html, okText:'保存设置', cancelText:'关闭',
+    onOk:function(m){
+      var n = +m.querySelector('#thN').value;
+      if(n>=100 && n<=420){ S.ui.thumb = Math.round(n/10)*10; document.documentElement.style.setProperty('--thumb',S.ui.thumb+'px'); }
+      var f = m.querySelector('#impF').files[0];
+      if(f){ importBackup(f); }
+      else { save(); closeModal(); refreshAll(); toast('设置已保存','ok'); }
+    }
+  });
+  var cs = $('#modal').querySelector('#bClearSample');
+  cs && cs.addEventListener('click', function(){ closeModal(); clearSample(); });
+  var ck = $('#modal').querySelector('#bCheck');
+  ck && ck.addEventListener('click', function(){ closeModal(); checkFiles(); });
+}
+function importBackup(file){
+  var fr = new FileReader();
+  fr.onload = function(){
+    try{
+      var d = JSON.parse(fr.result);
+      if(!d || !d.tree || !Array.isArray(d.tree.cats)) throw new Error('格式不符');
+      S.tree = d.tree;
+      if(d.ui) S.ui = Object.assign(S.ui, d.ui);
+      dropAssetCache(); save(); closeModal(); refreshAll();
+      toast('索引已导入，请点击素材确认本地文件是否齐全','ok');
+    }catch(e){ toast('导入失败：文件格式不正确','err'); }
+  };
+  fr.readAsText(file);
+}
+function clearSample(){
+  openModal({ title:'清空示例数据',
+    icon:'<span class="ic" style="background:var(--danger-bg);color:var(--danger)">'+ic('trash',17)+'</span>',
+    warn:'将删除预置的示例目录结构。<br>你自己创建的目录和素材<b>不会被删除</b>。',
+    okText:'清空示例', cancelText:'取消',
+    onOk:function(){
+      S.tree.cats = allCats().filter(function(c){ return !c.sample; });
+      S.ui.cur={}; save(); closeModal(); refreshAll(); toast('示例数据已清空','ok');
+    }
+  });
+}
+
+/* --- 文件缺失体检 --- */
+async function checkFiles(){
+  // 未连接本地文件夹时无法核对：这时报「文件缺失」是误导，文件在硬盘上好好的
+  if(S.mode==='fs' && !FS.root){
+    toast('尚未连接本地文件夹，无法核对。请先点击右上角连接后再体检','err');
+    return;
+  }
+  var all=[]; allGroupsOf(S).forEach(function(g){
+    (g.assets||[]).forEach(function(a){ all.push({a:a,g:g}); }); });
+  if(!all.length){ toast('当前还没有素材','err'); return; }
+  dropAssetCache();
+  busy(true,'正在核对 '+all.length+' 个素材…');
+  var miss=0, ok=0, unreadable=0;
+  try{
+    for(var i=0;i<all.length;i++){
+      var a=all[i].a;
+      a.missing=false; a.fsOffline=false;
+      var u=await thumbUrl(a);
+      if(u) ok++;
+      else if(a.fsOffline) unreadable++;     // 读不到（权限/目录移动），不等于丢失
+      else { miss++; a.missing=true; }
+    }
+  }finally{ busy(false); }
+  save(); refreshAll();
+  if(!miss && !unreadable) toast('全部 '+ok+' 个素材的本地文件均正常','ok');
+  else {
+    var parts=[];
+    if(miss) parts.push(miss+' 个文件已缺失');
+    if(unreadable) parts.push(unreadable+' 个暂时读不到（目录被移动或权限不足）');
+    toast(parts.join('，')+'，已在卡片上标记','err');
+  }
+}
+
+/* =====================================================================
+   素材预览
+   ===================================================================== */
+function openAsset(aid){
+  var a = findAssetById(aid);
+  if(!a) return;
+  var g = groupOfAsset(aid);
+  var gid = g ? g.id : null;
+  var body='<div style="margin-top:6px;font-size:13px">'
+    + '<div style="font-size:12px;color:var(--ink3);margin-bottom:4px">所属位置</div>'
+    + '<div style="margin-bottom:12px">'+esc(pathNameOf(gid))+'</div>'
+    + '<div class="fld"><label>素材名称（改名不影响归属与文件对应关系）</label>'
+    + '<input type="text" id="aNm" value="'+esc(a.name||'')+'"></div>'
+    + '<div class="fld"><label>标签（空格分隔，用于标注用途、来源、特点）</label>'
+    + '<input type="text" id="aTg" value="'+esc((a.tags||[]).join(' '))+'"></div>'
+    + '<div style="font-size:12px;color:var(--ink3);margin-top:12px;line-height:1.9">'
+    + '本地文件名：<code style="font-size:11px">'+esc(a.fileName)+'</code><br>'
+    + '类型：'+esc(a.type)+' · 大小：'+fmtSize(a.size)+' · 添加于：'+fmtDate(a.ts)+'</div></div>';
+  var m = openModal({ title:'素材详情', wide:true,
+    icon:'<span class="ic">'+ic(a.type==='image'?'imgs':(a.type==='video'?'vid':'doc'),17)+'</span>',
+    body: body, okText:'保存', cancelText:'关闭' });
+  m.querySelector('[data-x="c"]').addEventListener('click', closeModal);
+  // 预览
+  thumbUrl(a).then(function(u){
+    if(!u || a.type!=='image') return;
+    var img = document.createElement('img');
+    img.src=u; img.style.cssText='max-width:100%;max-height:220px;border-radius:10px;margin-bottom:14px;border:1px solid var(--bd)';
+    var b=m.querySelector('.mbd'); b.insertBefore(img, b.children[1]||b.firstChild);
+  });
+  m.querySelector('[data-x="ok"]').addEventListener('click', function(){
+    var v=m.querySelector('#aNm').value.trim(); if(!v) v=a.name;
+    var tg=m.querySelector('#aTg').value.split(/\s+/).filter(Boolean);
+    a.name=v; a.tags=tg; markDirty(a); saveMeta(); saveTree();
+    closeModal(); refreshAll(); toast('已保存','ok');
+  });
+}
+function pathNameOf(gid){
+  var g=findGroup(gid); if(!g) return '未知位置';
+  var s=findStyle(g.styleId), p=prodOfStyle(g.styleId), c=p?findCat(p.catId):null;
+  return [c?c.name:'?', p?p.name:'?', s?s.name:'?', g.name].join(' / ');
+}
+
+/* =====================================================================
+   示例数据（首次打开非空白）
+   ===================================================================== */
+function seedSample(){
+  var cat={id:nid('c'), name:'示例 · 2026 春季新品', order:0, sample:true, products:[]};
+  var p1={id:nid('p'), name:'保温杯 500ml', order:0, catId:cat.id, styles:[]};
+  var s1={id:nid('s'), name:'磨砂白 · 500ml', order:0, groups:[]};
+  presetInto(s1);
+  s1.groups.push({id:nid('g'), name:'包装素材', order:3, styleId:s1.id, colorIdx:3, assets:[]});
+  var p2={id:nid('p'), name:'运动水壶 750ml', order:1, catId:cat.id, styles:[]};
+  var s2={id:nid('s'), name:'雾霾蓝 · 750ml', order:0, groups:[]};
+  presetInto(s2);
+  p1.styles=[s1]; p2.styles=[s2]; cat.products=[p1,p2];
+  S.tree.cats=[cat];
+  S.ui.cur={catId:cat.id, prodId:p1.id, styleId:s1.id, groupId:s1.groups[0].id};
+  S.seeded = true; save();
+}
+
+/* =====================================================================
+   启动
+   ===================================================================== */
+document.documentElement.style.setProperty('--thumb','220px');
+/* 横向溢出兜底：.main 一旦设置 overflow-x:hidden/auto 就会破坏内部 sticky。
+   正确做法是 overflow-x:clip（只裁剪、不创建滚动容器）。
+   老浏览器不支持 clip 会降级成 hidden（sticky 失效），
+   因此这里用 JS 检测：只有在 clip 确实无效时才降级，并在降级时改用 JS 固定。 */
+function initOverflowGuard(){
+  var m = $('#main'); if(!m) return;
+  // 先试 clip：不支持则 getComputedStyle 会返回 hidden
+  m.style.overflowX = 'clip';
+  var probe = getComputedStyle(m).overflowX;
+  if(probe === 'clip') return;          // 支持 clip，直接收工，sticky 保持有效
+  // 不支持 clip：退而求其次，用 JS 监听滚动把吸顶层 fixed 化
+  m.style.overflowX = 'hidden';         // 允许横向裁剪（sticky 会失效，由 JS 兜）
+  var ts = m.querySelector('.topsticky');
+  if(!ts) return;
+  var baseTop = m.getBoundingClientRect().top;
+  function sync(){
+    var over = m.scrollTop > 2;
+    if(over){
+      ts.style.position = 'fixed';
+      ts.style.top = baseTop + 'px';
+      ts.style.left = m.getBoundingClientRect().left + 'px';
+      ts.style.right = '0px';
+    }else{
+      ts.style.position = ''; ts.style.top = ''; ts.style.left = ''; ts.style.right = '';
+    }
+  }
+  m.addEventListener('scroll', sync, {passive:true});
+  window.addEventListener('resize', sync);
+  sync();
+}
+// 启动：boot() 先读骨架，再从 IndexedDB 恢复素材元数据，完成后才首次渲染
+boot().then(function(){
+  document.documentElement.style.setProperty('--thumb', (S.ui.thumb||220)+'px');
+  refreshAll();
+  initOverflowGuard();
+  if(!fsSupported()){
+    setTimeout(function(){ toast('当前浏览器不支持写入本地文件夹。素材会存在浏览器数据库中，建议定期导出备份','err'); },900);
+  }
+}).catch(function(e){
+  S = defaultState(); seedSample(); invalidateIndex();
+  document.documentElement.style.setProperty('--thumb','220px');
+  refreshAll();
+  toast('数据加载异常：'+(e && e.message ? e.message : '未知错误')+'，已重置为示例数据','err');
+});
+
+// 立即落盘素材索引（不等去抖定时器）
+// 背景：saveMeta 有 400ms 去抖，页面关闭/切后台时定时器不会执行完，素材索引会丢。
+function flushMeta(){
+  if(metaTimer){ clearTimeout(metaTimer); metaTimer = null; }
+  var batch = metaDirty; metaDirty = {};
+  var ids = Object.keys(batch);
+  if(!ids.length) return Promise.resolve(0);
+  var packed = {};
+  ids.forEach(function(id){ packed[id] = packMeta(batch[id]); });
+  return metaPutMany(packed).then(function(n){
+    saveTree();
+    if(n === -1) toast('素材索引保存失败，请立即导出备份','err');
+    return n;
+  });
+}
+// 页面隐藏（切后台/最小化/关闭）时立即落盘
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState === 'hidden'){
+    saveTree();
+    flushMeta();
+  }
+});
+// 关闭前尽力同步写入（异步 Promise 在卸载时不可靠，故同时落骨架）
+window.addEventListener('beforeunload', function(){
+  invalidateIndex();
+  saveTree();
+  flushMeta();
+});
+// 兜底：pagehide 在移动端更可靠
+window.addEventListener('pagehide', function(){
+  saveTree();
+  flushMeta();
+});
+
+// 调试钩子：便于自动化测试与问题排查（不影响正常使用）
+window.__wb = { parseDrop: parseDrop, doAdd: doAdd, canHandleFolder: canHandleFolder,
+  thumbUrl: thumbUrl, getState: function(){ return S; }, idbGet: idbGet,
+  saveTree: saveTree, saveMeta: saveMeta, flushMeta: flushMeta, metaKeys: metaKeys, metaPut: metaPut,
+  invalidateIndex: invalidateIndex, countAssetsOfStyle: countAssetsOfStyle, idbReset: idbReset, metaAll: metaAll,
+  restoreAssets: restoreAssets, metaPutMany: metaPutMany, pickRoot: pickRoot,
+  checkFiles: checkFiles, toggleSelectAll: toggleSelectAll, dialogDelSelIn: dialogDelSelIn,
+  // 诊断与性能基准入口（只读，不改变对外行为）
+  refreshAll: refreshAll, loadThumbs: loadThumbs, renderBody: renderBody,
+  findGroup: findGroup, findStyle: findStyle, findCat: findCat, findProd: findProd,
+  findAssetById: findAssetById };
+</script>
+</body>
+</html>
