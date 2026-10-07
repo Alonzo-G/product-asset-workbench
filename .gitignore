@@ -1,0 +1,7 @@
+# 工作数据（本地素材索引、会话记忆等，不随代码备份）
+.workbuddy/
+
+# 系统文件
+Thumbs.db
+.DS_Store
+desktop.ini
